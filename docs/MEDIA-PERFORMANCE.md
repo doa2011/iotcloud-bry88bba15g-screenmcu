@@ -32,8 +32,10 @@ tests compare 150 randomized refreshes against an independent full-frame model,
 check frame ownership at every presentation and require zero preservation copies
 for complete redraws and repeated camera bounds.
 
-`SCREEN_DMA2D` defaults ON. One active 480×40 LVGL draw buffer serializes CPU pixel
-drawing and DMA reads. DMA2D waits 512 HCLK cycles between 64-word blocks, allowing
+`SCREEN_DMA2D` defaults ON. One active 480×32 LVGL draw buffer in internal SRAM
+serializes CPU pixel drawing and DMA reads. This removes the intermediate pixel
+writes and reads from the SDRAM bus shared with LCD scanout. The linker preserves
+the retained recovery state and separate 16 KiB stack. DMA2D waits 512 HCLK cycles between 64-word blocks, allowing
 the LCD to refill its FIFO; its completion interrupt wakes the waiting CPU.
 Preservation uses aligned CPU copies after DMA completion. Earlier concurrent
 rendering and large DMA mirrors shook during real updates. The revised serial
@@ -41,7 +43,11 @@ path was reported stable on the test display; the stale-span optimization keeps
 that transfer interval, ownership and serialization unchanged. Startup checks
 RGB565 order, row stride and guard pixels. A 50 ms timeout resets DMA and keeps
 CPU fallback for subsequent flushes. Set `SCREEN_DMA2D=OFF` for comparison.
-The second allocated strip is startup scratch only.
+Startup scratch uses only 24 pixels in SDRAM, rather than another complete strip.
+
+活动绘制缓冲为内部 SRAM 中的 480×32 像素，减少绘制、DMA 与 LCD 对外部
+SDRAM 带宽的争用。链接检查继续保护恢复状态和独立的 16 KiB 栈；启动 DMA
+自检仅使用额外 24 像素暂存。像素缩放、串行传输和帧边界切换规则保持一致。
 
 The second full frame adds 819840 bytes and stale spans add 3416 bytes. The linked
 image reserves a 128 KiB LVGL arena and 64 KiB libc heap, with another 896 KiB of

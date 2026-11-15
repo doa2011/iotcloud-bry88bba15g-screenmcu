@@ -141,7 +141,12 @@ static void rtc_tick(uint32_t now) {
 }
 static lv_color_t framebuffer[2][480 * 854]
     __attribute__((section(".framebuffer"), aligned(64)));
-static lv_color_t drawbuffer[2][480 * 40];
+/* Keep CPU writes and DMA reads off the SDRAM bus used by LCD scanout.
+ * 32 rows fit below retained state while preserving the separate 16 KiB stack.
+ * The second buffer is only used by the 24-pixel DMA startup self-test. */
+static lv_color_t drawbuffer_active[480 * SCREEN_DRAW_ROWS] IRAM;
+static lv_color_t drawbuffer_scratch[24];
+static lv_color_t *const drawbuffer[2] = {drawbuffer_active, drawbuffer_scratch};
 static lv_disp_draw_buf_t draw;
 static lv_disp_drv_t display;
 static screen_display_diag display_diagnostics;
@@ -390,7 +395,7 @@ static void display_diag_poll(void){
                   p[8]|p[9]<<8,p[10],reply,sizeof(reply));
   if(n){
     board_display_diag(reply);
-    scene_put32(reply+84,(uint32_t)drawbuffer);scene_put32(reply+88,480*40);
+    scene_put32(reply+84,(uint32_t)drawbuffer[0]);scene_put32(reply+88,480*SCREEN_DRAW_ROWS);
     char wire[768];size_t bytes=screen_link_encode(wire,sizeof(wire),runtime.caps.session,
                              runtime.tx_sequence+1,reply,n);
     if(bytes&&board_send(&factory,wire,bytes)){
@@ -773,7 +778,7 @@ void screen_start(void) {
   display_dma_init();
   /* Serialize pixel drawing and DMA reads to avoid three concurrent SDRAM
    * users (CPU, DMA2D and continuous LCD). The second strip is startup scratch. */
-  lv_disp_draw_buf_init(&draw, drawbuffer[0], NULL, 480 * 40);
+  lv_disp_draw_buf_init(&draw, drawbuffer[0], NULL, 480 * SCREEN_DRAW_ROWS);
   lv_disp_drv_init(&display);
   display.hor_res = 480;
   display.ver_res = 854;

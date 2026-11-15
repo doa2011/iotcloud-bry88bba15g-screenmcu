@@ -43,7 +43,7 @@ size_t screen_diag_encode(screen_display_diag *d,uint32_t request,unsigned statu
   out[3]=(d->active?1:0)|(d->waiting?2:0)|(d->enabled?4:0);
   uint32_t values[]={request,d->generation,d->page,d->elapsed_us,d->flush_count,
       d->flush_us,d->flush_max_us,d->monitor_count,d->monitor_ms,d->monitor_pixels,
-      d->stored,d->dropped,offset,count,40};
+      d->stored,d->dropped,offset,count,SCREEN_DRAW_ROWS};
   for(unsigned i=0;i<sizeof(values)/sizeof(*values);i++)scene_put32(out+4+4*i,values[i]);
   for(unsigned i=0;i<count;i++){
     screen_diag_record *r=&d->trace[offset+i];uint8_t *p=out+SCREEN_DIAG_SUMMARY_BYTES+i*SCREEN_DIAG_RECORD_BYTES;
