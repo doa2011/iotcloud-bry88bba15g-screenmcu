@@ -78,13 +78,33 @@ The ESP remains a bounded TCP/TLS byte relay. Extra queued frames increase
 latency without removing UART delivery time; compare completed camera frames,
 page latency and control/sensor health when assessing further acceleration.
 
+On one BRY88BBA15G with the UART at 921600 baud, a moving JPEG fixture at
+10 FPS gave the following completed-decode rates. Each measurement spans
+23–35 seconds, with the display awake and diagnostics collected afterward.
+The ESP firmware and fixture were unchanged between the two MCU builds.
+
+| JPEG size / 尺寸 | SDRAM draw strip / 原缓冲 | Internal SRAM strip / 内部缓冲 |
+| --- | --- | --- |
+| 160×120 | 3.01 FPS | 4.12 FPS |
+| 320×240 | 2.16 FPS | 3.43 FPS |
+| 480×360 | 1.46 FPS | 2.10 FPS |
+
+These rates count completed decodes, not LCD presentations. The 10 FPS setting
+is a requested stream rate; source size, UART delivery and rendering still
+limit the achieved rate.
+
+同一台设备在串口 921600 波特率下，以 10 FPS 动态 JPEG 源对比两版 MCU，
+每组记录实际 23–35 秒，保持屏幕唤醒，采样后再读取诊断。ESP 固件和图像源
+保持一致，完成解码的帧率提高约 37%–59%。10 FPS 是请求速率，实际仍受图像
+大小、串口传输和绘制速度限制；表中数据不等同于 LCD 呈现帧率。
+
 摄像头卡片和图片四周留白完全透明，透出页面壁纸或底色；画面像素仍为不透明
 RGB565。网页预览同步透明度和尺寸。通知叠层在创建时预先计算实色，保留圆角
 和层次；充电闪电保持透明背景。
 图像裁剪容器只在采样确定为不透明的像素范围内声明覆盖，让 LVGL 跳过图像下方
 的壁纸绘制；留白区域继续透出背景。半透明图像和已有遮罩不声明这种覆盖。
 
-当前默认启用 DMA2D，单份 40 行活动缓冲串行完成绘制和搬运，每 64 字保留
+当前默认启用 DMA2D，单份 32 行活动缓冲串行完成绘制和搬运，每 64 字保留
 512 个时钟间隔，完成中断唤醒等待的 CPU。实机已反馈这种串行路径不再抖动。
 保持约 30 Hz 扫描、完整双帧和帧开始交换。旧前台帧释放后只标记每行脏区，
 下一轮优先让新画面直接覆盖；只用 CPU 补齐未重画但需要保留的像素，再请求
