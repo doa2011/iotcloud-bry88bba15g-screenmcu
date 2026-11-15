@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "fast_image.h"
+#include "display_diag.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
-static lv_color_t strips[480 * 40], pixels[320 * 240];
+static lv_color_t strips[480 * SCREEN_DRAW_ROWS], pixels[320 * 240];
 static uint16_t frame[480 * 854], reference[480 * 854];
 LV_FONT_DECLARE(zh32);
 static void flush(lv_disp_drv_t *d, const lv_area_t *a, lv_color_t *p) {
@@ -17,7 +18,7 @@ static void flush(lv_disp_drv_t *d, const lv_area_t *a, lv_color_t *p) {
 int main(void) {
   lv_init();
   lv_disp_draw_buf_t buffer;
-  lv_disp_draw_buf_init(&buffer, strips, NULL, 480 * 40);
+  lv_disp_draw_buf_init(&buffer, strips, NULL, 480 * SCREEN_DRAW_ROWS);
   lv_disp_drv_t driver;
   lv_disp_drv_init(&driver);
   driver.hor_res = 480; driver.ver_res = 854;

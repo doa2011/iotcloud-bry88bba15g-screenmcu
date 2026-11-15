@@ -1,5 +1,6 @@
 #pragma once
 #include "../protocol/display_diag.h"
+enum { SCREEN_DRAW_ROWS = 32 };
 typedef struct {
   uint32_t offset_us,duration_us,pixels;
   int16_t x1,y1,x2,y2;
