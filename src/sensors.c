@@ -50,6 +50,14 @@ void sensor_air_init(sensor_air_state *s,uint32_t last_stop) {
 void sensor_air_receive(sensor_air_state *s,bool measurement) {
  s->missed=0;if(measurement)s->received=1;
 }
+bool sensor_air_warmup(const sensor_air_state *s,uint32_t now,
+ uint32_t *duration,uint32_t *elapsed,uint32_t *remaining) {
+ if(!s->received||s->phase<1||s->phase>3)return false;
+ *duration=(s->phase==1?3600u:s->phase==2?1800u:300u)*1000u;
+ uint32_t age=now-s->started;
+ *elapsed=age<*duration?age:*duration;
+ *remaining=*duration-*elapsed;return true;
+}
 bool sensor_air_update(sensor_air_state *s,uint32_t utc,uint32_t now) {
  bool save=false;
  if(s->previous!=s->received){

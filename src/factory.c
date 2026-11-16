@@ -163,6 +163,14 @@ void factory_snapshot(factory_owner *f, const char *token, bool response) {
                                 ? 0x59
                                 : 0x52);
   }
+  uint32_t warmup_duration, warmup_elapsed, warmup_remaining;
+  if (f->runtime->air_owned &&
+      sensor_air_warmup(&f->runtime->air, f->runtime->now,
+                       &warmup_duration, &warmup_elapsed, &warmup_remaining))
+    cJSON_AddNumberToObject(s, "tvoc_warmup_seconds_remaining",
+                            (warmup_remaining + 999) / 1000);
+  else
+    cJSON_AddNullToObject(s, "tvoc_warmup_seconds_remaining");
   cJSON *cal = object(d, "calibration");
   cJSON_AddNumberToObject(cal, "version", 1);
   cJSON_AddNumberToObject(cal, "pending", f->runtime->calibration.pending);

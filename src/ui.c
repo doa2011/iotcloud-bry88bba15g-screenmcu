@@ -571,10 +571,13 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
     if(local&&it->binding==MET_TVOC&&grade) strcpy(b,screen_tvoc_text(ok?m->tvoc_level:0));
     else if(grade)snprintf(b,sizeof(b),"%s",fresh&&d->text[0]?d->text:"--");
     else if(ok) number(b,sizeof(b),v,it->binding);else strcpy(b,"--");
+    bool warming=local&&it->binding==MET_TVOC&&!ok&&m->tvoc_warmup_seconds_remaining;
+    if(warming)snprintf(b,sizeof(b),"%02lu:%02lu",(unsigned long)(m->tvoc_warmup_seconds_remaining/60),(unsigned long)(m->tvoc_warmup_seconds_remaining%60));
     unsigned color=ok?wc(2):MUTED;
     if(it->binding==MET_TVOC&&m->tvoc_level==3)color=appearance_color(appearance,AP_DANGER);
     const char *unit=it->unit;if(local)unit=metric_unit(it->binding);
     if(grade||it->binding==MET_HCHO)unit="";
+    if(warming)unit=english?"Wait":"等待";
     value_card(c,it,title,!local&&d&&!fresh?"已过期":unit,b,grade,color,w,h);
   } else if(it->type==SC_TEXT) {
     const char *body=fresh?d->text:it->text[0]?it->text:d?"已过期":"--";
@@ -621,7 +624,7 @@ static uint64_t content_hash(const screen_model *m,const scene_item *it,uint32_t
       char text[32]="--";
       bool grade=it->binding==MET_TVOC&&it->value_mode!=SC_VALUE_NUMBER;
       if(valid&&!grade)number(text,sizeof(text),m->samples[it->binding].value,it->binding);
-      hash=hash_bytes(hash,text,strlen(text));if(it->binding==MET_TVOC)HASH(m->tvoc_level);
+      hash=hash_bytes(hash,text,strlen(text));if(it->binding==MET_TVOC){HASH(m->tvoc_level);if(!valid)HASH(m->tvoc_warmup_seconds_remaining);}
     } else if(it->type==SC_WEATHER) {
       HASH(m->weather.valid);HASH(m->weather.expired);
       /* Provider refresh timestamps do not change the displayed forecast. */

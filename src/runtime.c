@@ -292,6 +292,10 @@ void screen_runtime_feed(screen_runtime *s, const void *data, size_t n,
 }
 void screen_runtime_tick(screen_runtime *s, uint32_t now) {
   s->now = now;
+  uint32_t warmup_duration, warmup_elapsed, warmup_remaining;
+  s->model.tvoc_warmup_seconds_remaining = s->air_owned &&
+      sensor_air_warmup(&s->air, now, &warmup_duration, &warmup_elapsed,
+                       &warmup_remaining) ? (warmup_remaining + 999) / 1000 : 0;
   if (screen_module_tick(&s->module, now)) screen_runtime_module_report(s);
   if (s->clock_epoch) {
     uint32_t seconds = (now - s->clock_at) / 1000;

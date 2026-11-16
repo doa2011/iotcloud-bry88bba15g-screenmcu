@@ -34,23 +34,38 @@ static void same_cal(const sensor_calibration *a,const sensor_calibration *b){
 }
 int main(void){
  sensor_air_state air;uint8_t command[12];bool save;
+ uint32_t duration,elapsed,remaining;
+ sensor_air_init(&air,0);
+ assert(!sensor_air_warmup(&air,1234,&duration,&elapsed,&remaining));
  sensor_air_init(&air,0);sensor_air_receive(&air,true);
  sensor_air_poll(&air,0,10000,1000,9,0x51,234,567,command,&save);
  assert(air.mode==3 && air.tvoc_status==0x56);
+ assert(sensor_air_warmup(&air,10000,&duration,&elapsed,&remaining));
+ assert(duration==3600000 && elapsed==0 && remaining==3600000);
+ assert(sensor_air_warmup(&air,3609001,&duration,&elapsed,&remaining));
+ assert(elapsed==3599001 && remaining==999);
  sensor_air_poll(&air,1700000000,3609000,1000,9,0x51,234,567,command,&save);
  assert(air.tvoc_status==0x56 && command[2]==0x0b && command[4]==1);
  sensor_air_update(&air,1700000001,3610000);
  assert(air.tvoc_status==0x51);
+ assert(sensor_air_warmup(&air,9999999,&duration,&elapsed,&remaining));
+ assert(elapsed==duration && remaining==0);
  air.received=0;assert(sensor_air_update(&air,1700000010,3620000));
+ assert(!sensor_air_warmup(&air,3620000,&duration,&elapsed,&remaining));
  assert(!sensor_air_update(&air,1700000011,3621000));
  for(unsigned gap=0;gap<3;gap++){
   sensor_air_init(&air,1000);sensor_air_receive(&air,true);
   sensor_air_update(&air,1000+(gap==0?3599:gap==1?3600:172801),20000);
   assert(air.mode==(gap==0?1:gap==1?2:3));
+  assert(sensor_air_warmup(&air,20001,&duration,&elapsed,&remaining));
+  assert(duration==(gap==0?300000u:gap==1?1800000u:3600000u));
+  assert(elapsed==1 && remaining==duration-1);
  }
  sensor_air_init(&air,0);sensor_air_receive(&air,true);
  sensor_air_update(&air,0,0xfffffff0u);
  sensor_air_update(&air,0,1000);assert(air.tvoc_status==0x56);
+ assert(sensor_air_warmup(&air,1000,&duration,&elapsed,&remaining));
+ assert(elapsed==1016 && remaining==3600000-1016);
  sensor_air_update(&air,0,3600000u-16);assert(air.tvoc_status==0x51);
  sensor_poll_state schedule={0};unsigned reads=0;
  for(unsigned i=0;i<16;i++)if(sensor_poll_next(&schedule)==SENSOR_POLL_SHT_READ){assert(i==6||i==14);reads++;}
@@ -128,6 +143,13 @@ int main(void){
   assert(!cal.pending&&reports==2&&commands==(scenario==1?2u:0u));
  }
  static screen_runtime runtime;
+ screen_runtime_init(&runtime);
+ runtime.air_owned=true;sensor_air_receive(&runtime.air,true);
+ sensor_air_update(&runtime.air,0,100);
+ screen_runtime_tick(&runtime,1101);
+ assert(runtime.model.tvoc_warmup_seconds_remaining==3599);
+ runtime.air.received=0;screen_runtime_tick(&runtime,1200);
+ assert(runtime.model.tvoc_warmup_seconds_remaining==0);
  screen_runtime_init(&runtime);
  runtime.air_owned=true;runtime.air.received=1;runtime.air.pm_status=0x51;
  for(unsigned t=100;t<=3600100;t+=100){

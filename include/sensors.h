@@ -36,6 +36,11 @@ typedef struct {
 } sensor_air_state;
 void sensor_air_init(sensor_air_state *, uint32_t last_stop);
 void sensor_air_receive(sensor_air_state *, bool measurement);
+/* Measurement warmup, independent of the calibration admission timer.
+ * False means stopped/unknown; zero remaining means the phase has elapsed,
+ * not that a fresh valid measurement has already arrived. */
+bool sensor_air_warmup(const sensor_air_state *, uint32_t monotonic_ms,
+ uint32_t *duration_ms, uint32_t *elapsed_ms, uint32_t *remaining_ms);
 bool sensor_air_update(sensor_air_state *, uint32_t utc, uint32_t monotonic_ms);
 unsigned sensor_air_poll(sensor_air_state *, uint32_t utc, uint32_t monotonic_ms, uint16_t co2,
  uint16_t hcho, uint8_t hcho_status, int32_t temperature10, int32_t humidity10,

@@ -33,6 +33,7 @@ typedef struct {
   screen_sample samples[SCREEN_METRICS];
   /* Factory category, 1=优, 2=良, 3=差. Raw TVOC remains available for calibration. */
   uint8_t tvoc_level;
+  uint32_t tvoc_warmup_seconds_remaining;
   screen_point history[SCREEN_HISTORY];
   unsigned head, count, page;
   bool asleep, clock_valid, network;

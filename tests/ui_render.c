@@ -79,6 +79,19 @@ static void artifact(const char *name) {
   lv_color_t c={.full=frame[i]};lv_color32_t v={.full=lv_color_to32(c)};fputc(v.ch.red,f);fputc(v.ch.green,f);fputc(v.ch.blue,f);
  }fclose(f);
 }
+static void tvoc_countdown(void) {
+ screen_init(&model);scene(SC_VALUE,2,2);model.scene.item[0].binding=MET_TVOC;
+ model.tvoc_warmup_seconds_remaining=3599;
+ assert(screen_ui(&model,120000,false));draw();assert(find(lv_scr_act(),"59:59"));artifact("tvoc-warmup");
+ assert(!screen_ui(&model,120000,false));
+ model.tvoc_warmup_seconds_remaining=3598;
+ assert(screen_ui(&model,121000,false));draw();assert(find(lv_scr_act(),"59:58"));
+ model.tvoc_warmup_seconds_remaining=0;
+ assert(screen_ui(&model,122000,false));draw();assert(!find(lv_scr_act(),"59:58"));
+ screen_sample_set(&model,MET_TVOC,375,true,122000);model.tvoc_level=1;
+ model.tvoc_warmup_seconds_remaining=15;
+ assert(screen_ui(&model,122000,false));draw();assert(!find(lv_scr_act(),"00:15"));
+}
 static void media_and_battery(void) {
  screen_init(&model);scene(SC_IMAGE,4,6);model.scene.item[0].hide_title=1;
  model.charging=true;model.battery_valid=true;model.battery_percent=78;
@@ -154,10 +167,28 @@ static void media_and_battery(void) {
  camera_image=lv_obj_get_child(lv_obj_get_child(camera,0),0);
  assert(lv_obj_get_width(camera_image)==480&&lv_obj_get_height(camera_image)==360);
  assert(frame[480*480+240]==0x001f);
+ /* The saved camera card may move and resize without changing the source. */
+ model.scene.item[0].x=1;model.scene.item[0].w=2;model.scene.item[0].h=3;
+ assert(screen_ui(&model,120002,false));draw();
+ camera=NULL;for(unsigned i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){
+  lv_obj_t *o=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_get_x(o)==130&&lv_obj_get_y(o)==UI_GRID_TOP)camera=o;
+ }
+ assert(camera&&lv_obj_get_width(camera)==220&&lv_obj_get_height(camera)==382);
+ clip=lv_obj_get_child(camera,0);camera_image=lv_obj_get_child(clip,0);
+ assert(lv_obj_get_width(clip)==196&&lv_obj_get_height(clip)==358);
+ assert(lv_img_get_zoom(camera_image)==196u*256/480);artifact("camera-layout-contain");
+ model.scene.item[0].image_fit=1;
+ assert(screen_ui(&model,120002,false));draw();
+ for(unsigned i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){
+  lv_obj_t *o=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_get_x(o)==130&&lv_obj_get_y(o)==UI_GRID_TOP)camera=o;
+ }
+ camera_image=lv_obj_get_child(lv_obj_get_child(camera,0),0);
+ assert(lv_img_get_zoom(camera_image)==358u*256/360);artifact("camera-layout-cover");
  /* Reproduce the old style with the same renderer for the comparison. */
  lv_obj_set_style_bg_opa(charging,LV_OPA_COVER,0);draw();
  assert(frame[28*480+417]==lv_color_hex(appearance_color(&model.appearance,AP_LINE)).full);artifact("charging-before");
  lv_obj_set_style_bg_opa(charging,LV_OPA_TRANSP,0);draw();artifact("charging-after");
+ model.scene.item[0].x=0;model.scene.item[0].w=4;model.scene.item[0].h=6;
  model.scene.item[0].image_fit=1;assert(screen_ui(&model,120000,false));draw();artifact("camera-cover");
   wallpaper.ready=false;wallpaper.kind=0;model.appearance.wallpaper=0;
  media_init(&media);media.queue[0]=(media_notice){.id=1,.confirm=1,.state=PUSH_QUEUED};
@@ -402,7 +433,7 @@ int main(void) {
  lv_disp_draw_buf_init(&buffer,pixels,NULL,SCREEN_WIDTH*16);
  lv_disp_drv_init(&display);display.hor_res=SCREEN_WIDTH;display.ver_res=SCREEN_HEIGHT;
  display.draw_buf=&buffer;display.flush_cb=flush;display.draw_ctx_init=screen_draw_ctx_init;lv_disp_drv_register(&display);
- screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
+ tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  compact_layout();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  scene(SC_VALUE,2,2);screen_sample_set(&model,MET_CO2,628,true,120000);
  assert(screen_ui(&model,120000,false));draw();inside(card());
