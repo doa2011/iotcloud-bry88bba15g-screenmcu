@@ -32,6 +32,7 @@ uint16_t sensor_co2(uint16_t raw);
  * retained timestamp write; callers must not save on every poll. */
 typedef struct {
  uint32_t polls, started, last_stop;
+ int16_t warmup_minutes; /* -1=factory phase, 1..60=custom measurement warmup */
  uint8_t previous, phase, mode, received, missed, pm_status, tvoc_status;
 } sensor_air_state;
 void sensor_air_init(sensor_air_state *, uint32_t last_stop);

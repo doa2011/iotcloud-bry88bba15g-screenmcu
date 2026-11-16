@@ -199,6 +199,7 @@ void factory_snapshot(factory_owner *f, const char *token, bool response) {
   cJSON_AddBoolToObject(s, "charging", m->charging);
   cJSON_AddBoolToObject(s, "power_state", !f->power->asleep);
   cJSON *display = object(cfg, "display");
+  cJSON_AddNumberToObject(cfg,"tvoc_warmup_minutes",f->runtime->tvoc_warmup_minutes);
   cJSON_AddNumberToObject(display, "luminance", f->settings[16]);
   cJSON_AddNumberToObject(display, "data_type", f->settings[17]);
   cJSON_AddNumberToObject(display, "power_screen_time", f->settings[18]);
@@ -254,6 +255,9 @@ static bool timevalue(cJSON *o, const char *key, unsigned *out) {
   return true;
 }
 static bool settings(factory_owner *f, cJSON *d) {
+  cJSON *warmup=get(d,"tvoc_warmup_minutes");
+  if(warmup && (!cJSON_IsNumber(warmup)||warmup->valuedouble < -1 || warmup->valuedouble == 0 ||
+      warmup->valuedouble > 60 || floor(warmup->valuedouble)!=warmup->valuedouble))return false;
   uint8_t candidate[64];
   memcpy(candidate, f->settings, 64);
   cJSON *v = get(d, "display");
@@ -283,12 +287,13 @@ static bool settings(factory_owner *f, cJSON *d) {
       return false;
     candidate[2] = cJSON_IsTrue(v);
   }
-  if (!get(d, "display") && !get(d, "no_disturb") && !get(d, "ipbox_push"))
+  if (!get(d, "display") && !get(d, "no_disturb") && !get(d, "ipbox_push") && !warmup)
     return false;
   memcpy(f->settings, candidate, 64);
   f->power->brightness = candidate[16];
   f->power->power_timeout = candidate[18];
   f->power->battery_timeout = candidate[19];
+  if(warmup)screen_runtime_tvoc_warmup(f->runtime,warmup->valueint);
   return true;
 }
 static void service(factory_owner *f, const char *topic, const char *text,

@@ -126,6 +126,14 @@ int main(void) {
   assert(cJSON_GetObjectItem(doc, "code")->valueint == 1);
   cJSON_Delete(doc);
   sensor_calibration before = r.calibration;
+  service(&f,"set","{\"client_token\":\"warm\",\"data\":{\"tvoc_warmup_minutes\":1}}");
+  assert(r.tvoc_warmup_minutes==1);
+  service(&f,"set","{\"client_token\":\"zero\",\"data\":{\"tvoc_warmup_minutes\":0}}");
+  assert(r.tvoc_warmup_minutes==1);
+  service(&f,"set","{\"client_token\":\"bad-warm\",\"data\":{\"tvoc_warmup_minutes\":1.5}}");
+  assert(r.tvoc_warmup_minutes==1);
+  service(&f,"set","{\"client_token\":\"auto\",\"data\":{\"tvoc_warmup_minutes\":-1}}");
+  assert(r.tvoc_warmup_minutes==-1 && !memcmp(&before,&r.calibration,sizeof(before)));
   service(&f, "hcho_install", "{\"client_token\":\"noop\",\"data\":{}}");
   doc = body();
   assert(cJSON_GetObjectItem(doc, "code")->valueint == 0);

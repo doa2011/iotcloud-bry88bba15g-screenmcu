@@ -167,6 +167,21 @@ static void media_and_battery(void) {
  camera_image=lv_obj_get_child(lv_obj_get_child(camera,0),0);
  assert(lv_obj_get_width(camera_image)==480&&lv_obj_get_height(camera_image)==360);
  assert(frame[480*480+240]==0x001f);
+ /* A partial-height full row camera reaches both screen edges. */
+ model.scene.item[0].h=3;model.scene.item[0].y=1;
+ for(unsigned fit=0;fit<2;fit++){
+  model.scene.item[0].image_fit=fit;
+  assert(screen_ui(&model,120002,false));draw();
+  camera=NULL;for(unsigned i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){
+   lv_obj_t *o=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_get_y(o)==UI_GRID_TOP+UI_ROW_PITCH)camera=o;
+  }
+  assert(camera&&lv_obj_get_x(camera)==0&&lv_obj_get_width(camera)==480&&lv_obj_get_height(camera)==382);
+  clip=lv_obj_get_child(camera,0);camera_image=lv_obj_get_child(clip,0);
+  assert(lv_obj_get_width(clip)==480&&lv_obj_get_height(clip)==358);
+  assert(lv_img_get_zoom(camera_image)==(fit?256:358u*256/360));
+  artifact(fit?"camera-row-cover":"camera-row-contain");
+ }
+ model.scene.item[0].y=0;model.scene.item[0].image_fit=0;
  /* The saved camera card may move and resize without changing the source. */
  model.scene.item[0].x=1;model.scene.item[0].w=2;model.scene.item[0].h=3;
  assert(screen_ui(&model,120002,false));draw();

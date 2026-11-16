@@ -148,6 +148,18 @@ int main(void){
  sensor_air_update(&runtime.air,0,100);
  screen_runtime_tick(&runtime,1101);
  assert(runtime.model.tvoc_warmup_seconds_remaining==3599);
+ uint32_t started=runtime.air.started;
+ runtime.calibration_valid_since[1]=777;
+ assert(screen_runtime_tvoc_warmup(&runtime,5));
+ assert(runtime.model.tvoc_warmup_seconds_remaining==299 && runtime.air.started==started);
+ assert(!screen_runtime_tvoc_warmup(&runtime,0));
+ assert(screen_runtime_tvoc_warmup(&runtime,1));
+ assert(runtime.model.tvoc_warmup_seconds_remaining==59 && runtime.tvoc_wait_measurement);
+ assert(!screen_sample_valid(&runtime.model,MET_TVOC,runtime.now));
+ assert(runtime.calibration_valid_since[1]==777);
+ assert(!screen_runtime_tvoc_warmup(&runtime,-2) && !screen_runtime_tvoc_warmup(&runtime,61));
+ assert(screen_runtime_tvoc_warmup(&runtime,-1));
+ assert(runtime.model.tvoc_warmup_seconds_remaining==3599 && runtime.air.started==started);
  runtime.air.received=0;screen_runtime_tick(&runtime,1200);
  assert(runtime.model.tvoc_warmup_seconds_remaining==0);
  screen_runtime_init(&runtime);

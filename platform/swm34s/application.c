@@ -516,7 +516,7 @@ static void air_apply(void) {
                     running && pm25_calibrated, air_received_at);
   screen_sample_set(&runtime.model, MET_TVOC,
                     running ? (tvoc_raw > 2000 ? 2000 : tvoc_raw) : 0,
-                    runtime.air.tvoc_status == 0x51, air_received_at);
+                    runtime.air.tvoc_status == 0x51 && !runtime.tvoc_wait_measurement, air_received_at);
 }
 static void air_save_stop(bool save) {
   if (save && runtime.model.clock_valid &&
@@ -561,6 +561,7 @@ static void sensor_frame_read(unsigned index, uint32_t now) {
         runtime.module.frames++;
         sensor_air_receive(&runtime.air, true);
         tvoc_raw = v;
+        runtime.tvoc_wait_measurement=false;
         unsigned raw = (unsigned)f->bytes[9] << 8 | f->bytes[10];
         unsigned coefficient = factory.settings[12] | factory.settings[13] << 8;
         pm25_calibrated = coefficient >= 1 && coefficient <= 1000;
@@ -853,6 +854,7 @@ void screen_start(void) {
   uint32_t last_stop;
   memcpy(&last_stop, factory.settings + 0x34, sizeof(last_stop));
   sensor_air_init(&runtime.air, last_stop);
+  runtime.air.warmup_minutes=runtime.tvoc_warmup_minutes;
   runtime.air_owned = true;
   normal_ready = true;
   screen_startup_begin(board_ms);

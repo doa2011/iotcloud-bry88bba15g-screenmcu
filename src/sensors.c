@@ -44,7 +44,7 @@ uint16_t sensor_pm25(uint16_t raw,uint16_t coefficient) {
 }
 uint16_t sensor_co2(uint16_t raw) {return raw>5000?5000:raw;}
 void sensor_air_init(sensor_air_state *s,uint32_t last_stop) {
- memset(s,0,sizeof(*s));s->last_stop=last_stop;
+ memset(s,0,sizeof(*s));s->last_stop=last_stop;s->warmup_minutes=-1;
  s->pm_status=s->tvoc_status=0x52;
 }
 void sensor_air_receive(sensor_air_state *s,bool measurement) {
@@ -53,7 +53,8 @@ void sensor_air_receive(sensor_air_state *s,bool measurement) {
 bool sensor_air_warmup(const sensor_air_state *s,uint32_t now,
  uint32_t *duration,uint32_t *elapsed,uint32_t *remaining) {
  if(!s->received||s->phase<1||s->phase>3)return false;
- *duration=(s->phase==1?3600u:s->phase==2?1800u:300u)*1000u;
+ *duration=s->warmup_minutes>=0?(uint32_t)s->warmup_minutes*60000u:
+     (s->phase==1?3600u:s->phase==2?1800u:300u)*1000u;
  uint32_t age=now-s->started;
  *elapsed=age<*duration?age:*duration;
  *remaining=*duration-*elapsed;return true;
@@ -71,8 +72,9 @@ bool sensor_air_update(sensor_air_state *s,uint32_t utc,uint32_t now) {
  }
  if(!s->phase){s->mode=0;s->pm_status=s->tvoc_status=0x52;}
  else if(s->phase<=3){
-  uint32_t duration=s->phase==1?3600:s->phase==2?1800:300;
-  bool warming=(uint32_t)(now-s->started)<duration*1000u;
+  uint32_t duration,elapsed,remaining;
+  sensor_air_warmup(s,now,&duration,&elapsed,&remaining);
+  bool warming=remaining!=0;
   s->mode=warming?(uint8_t)(4-s->phase):0;
   s->pm_status=0x51;s->tvoc_status=warming?0x56:0x51;
  }else s->pm_status=0x52;

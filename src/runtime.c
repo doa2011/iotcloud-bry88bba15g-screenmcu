@@ -222,6 +222,8 @@ void screen_runtime_init(screen_runtime *s) {
   s->sensor_config_valid = false;
   screen_module_init(&s->module, NULL, NULL, NULL);
   calibration_init(&s->calibration);
+  sensor_air_init(&s->air,0);s->tvoc_warmup_minutes=-1;
+  s->tvoc_wait_measurement=false;
   screen_link_init(&s->parser, receive, s);
 }
 bool screen_runtime_offer(screen_runtime *s, uint32_t nonce) {
@@ -289,6 +291,23 @@ void screen_runtime_feed(screen_runtime *s, const void *data, size_t n,
                          uint32_t now) {
   s->now = now;
   screen_link_feed(&s->parser, data, n);
+}
+bool screen_runtime_tvoc_warmup(screen_runtime *s,int minutes) {
+  if(minutes < -1 || minutes == 0 || minutes > 60)return false;
+  if(minutes!=s->tvoc_warmup_minutes){
+    s->tvoc_wait_measurement=true;
+    s->model.samples[MET_TVOC].valid=false;
+  }
+  s->tvoc_warmup_minutes=s->air.warmup_minutes=(int16_t)minutes;
+  uint32_t duration,elapsed,remaining;
+  bool known=s->air_owned && sensor_air_warmup(&s->air,s->now,&duration,&elapsed,&remaining);
+  s->model.tvoc_warmup_seconds_remaining=known?(remaining+999)/1000:0;
+  if(known){
+    s->air.tvoc_status=remaining?0x56:0x51;
+    /* Configuration may withhold an existing sample, never validate one. */
+    if(remaining)s->model.samples[MET_TVOC].valid=false;
+  }
+  return true;
 }
 void screen_runtime_tick(screen_runtime *s, uint32_t now) {
   s->now = now;

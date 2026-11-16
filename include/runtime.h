@@ -37,6 +37,8 @@ typedef struct {
   bool co2_not_ready, co2_raw_captured;
   uint16_t co2_raw;
   sensor_air_state air;
+  int16_t tvoc_warmup_minutes;
+  bool tvoc_wait_measurement;
   bool air_owned;
   screen_module module;
   calibration_emit calibration_event;
@@ -88,5 +90,6 @@ bool screen_runtime_calibration_service(screen_runtime *, bool has_co2, int co2,
 enum { SCREEN_CAL_IDLE, SCREEN_CAL_FAILED=2, SCREEN_CAL_SENT,
        SCREEN_CAL_ACKNOWLEDGED, SCREEN_CAL_CANCELLED, SCREEN_CAL_SENSOR_LOST };
 uint32_t screen_runtime_calibration_warmup(const screen_runtime *, unsigned index);
+bool screen_runtime_tvoc_warmup(screen_runtime *, int minutes);
 bool screen_runtime_calibration_cancel(screen_runtime *);
 void screen_runtime_calibration_ack(screen_runtime *);
