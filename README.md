@@ -35,7 +35,7 @@ cmake --build ~/.cache/phicomm/screen-arm -j8
 
 ## English
 
-Independent SWM34SVET6-50 application for the Daikin BRY88BBA15G, using LVGL 8.3.11 at 480 × 854. It retains stock UART business traffic and UART OTA, adds negotiated SCN3 layouts, APP1 appearance and v3 maintenance diagnostics, and pairs with the RC6 ESP32 firmware. Stock ESP32 operation uses the original UART protocol.
+Independent SWM34SVET6-50 application for the Daikin BRY88BBA15G, using LVGL 8.3.11 at 480 × 854. It retains stock UART business traffic and UART OTA, adds negotiated SCN3 layouts, APP1 appearance and v4 maintenance diagnostics, and pairs with the RC6 ESP32 firmware. Stock ESP32 operation uses the original UART protocol.
 
 Nine widget types cover clocks, measurements, text, line/bar/pie charts, weather, reminders and camera images. Themes, wallpaper, language, touch/remote paging, brightness and weekly sleep plans are configurable through the shared WebUI. Fonts and wallpaper are optional NOR resources, checked and cached in SDRAM; failed resources fall back without blocking sensors, communication or OTA.
 
