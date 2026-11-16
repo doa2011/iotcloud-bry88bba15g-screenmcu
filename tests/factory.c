@@ -175,6 +175,16 @@ int main(void) {
   used = 0;
   factory_tick(&f, 45000);
   assert(strstr(wire, "screen_caps 1 abcd0002 ") && r.offered);
+  /* Parse the actual factory/runtime offer, then complete its real ACK path. */
+  const char *offer = strstr(wire, "screen_caps 1 ");
+  const char *end = strstr(offer, "\r\n");
+  uint32_t session, caps;
+  assert(end && screen_caps_parse_offer(offer, (size_t)(end - offer), &session, &caps));
+  assert(caps & SCREEN_CAP_PAGE_POLICY);
+  char ack[80];size_t ack_bytes = screen_caps_ack(ack, sizeof(ack), session, caps);
+  assert(ack_bytes);
+  screen_runtime_feed(&r, ack, ack_bytes, 45001);
+  assert(r.caps.ready && (r.caps.capabilities & SCREEN_CAP_PAGE_POLICY));
   puts("factory UART snapshot scales, presence, token, atomic settings, "
        "invalid bounds, HCHO no-op, clock, provision and one offer per link passed");
 }
