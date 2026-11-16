@@ -94,6 +94,7 @@ static bool decode_ready(screen_stream *s) {
             j.width * 2u);
   s->width = j.width;
   s->height = j.height;
+  s->jpeg_crc = media_crc32(s->jpeg, s->frame_bytes);
   s->pixel_crc = media_crc32(s->pixels, j.width * j.height * 2u);
   s->frames++;
   s->period_frames++;
@@ -535,5 +536,6 @@ size_t stream_status(const screen_stream *s, uint8_t *p, size_t cap) {
   media_put32(p + 28, s->actual_millifps);
   media_put32(p + 32, s->revision);
   media_put32(p + 36, s->connection);
+  media_put32(p + 44, s->jpeg_crc);
   return MEDIA_STREAM_STATUS_BYTES;
 }

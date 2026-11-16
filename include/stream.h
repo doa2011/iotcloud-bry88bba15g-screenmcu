@@ -17,7 +17,7 @@ typedef struct {
   uint32_t connection, rx_sequence, now, at, retry_at, frame_at, frame_bytes;
   uint32_t frame_due;
   uint32_t frames, dropped, bytes, pixel_crc, revision, period_start,
-      period_frames, actual_millifps;
+      period_frames, actual_millifps, jpeg_crc;
   bool ready, tls, digest;
   unsigned port, request_at, request_size;
   char host[128], path[512], request[1536], challenge[512];
