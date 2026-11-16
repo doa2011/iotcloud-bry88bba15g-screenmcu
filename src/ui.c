@@ -597,7 +597,17 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
     if(!row)label(c,0,64,w,80,"暂无提醒",&zh32,MUTED);
   } else if(it->type==SC_IMAGE) {
     int top=it->hide_title?0:48;
-    if(stream.width&&stream.height)picture(c,&stream_image_descriptor,stream.pixels,stream.width,stream.height,0,top,w,h-top,it->image_fit!=0);
+    if(stream.width&&stream.height){
+      lv_obj_t *image=picture(c,&stream_image_descriptor,stream.pixels,stream.width,stream.height,0,top,w,h-top,it->image_fit!=0);
+      if(image&&!it->image_fit){
+        lv_point_t pivot;lv_img_get_pivot(image,&pivot);
+        /* LVGL aligns the unscaled box; compensate its zoom around the pivot
+         * so the visible contained frame starts at the camera region top. */
+        int scaled=(int32_t)pivot.y*((int)lv_img_get_zoom(image)-256);
+        int offset=(scaled<0?scaled-255:scaled)/256;
+        lv_obj_align(image,LV_ALIGN_TOP_MID,0,offset);
+      }
+    }
     else label(c,0,top,w,h-top,english?"Waiting for camera":"等待摄像头画面",&zh32,MUTED);
   }
   return c;
