@@ -53,6 +53,15 @@ int main(void) {
   for(unsigned i=0;i<5;i++)screen_sample_set(&m,i,i,true,2000);
   screen_startup_ui(&m,2000);assert(find(lv_layer_top(),"Sensors ready"));
   screen_font_resources.state=RESOURCE_READY;screen_startup_ui(&m,2100);assert(!lv_obj_get_child_cnt(lv_layer_top()));
+  /* A responding TVOC module is ready hardware while its measurement warms up. */
+  screen_init(&m);m.appearance.language=1;screen_startup_begin(3000);
+  for(unsigned i=0;i<4;i++)screen_sample_set(&m,i,i,true,3000);
+  screen_sample_set(&m,MET_TVOC,0,false,3000);
+  screen_startup_ui(&m,3000);draw();
+  assert(find(lv_layer_top(),"Loading")&&find(lv_layer_top(),"Sensors 4/5"));
+  m.tvoc_warmup_seconds_remaining=3599;screen_startup_ui(&m,3100);
+  assert(!lv_obj_get_child_cnt(lv_layer_top()));
+  assert(!screen_sample_valid(&m,MET_TVOC,3100)&&m.tvoc_warmup_seconds_remaining==3599);
   /* Missing optional HCHO does not delay completion. Missing fitted sensors
    * and failed NOR settle to a warning, then normal pages with no retry loop. */
   screen_init(&m);screen_startup_begin(0xfffffff0);screen_font_resources.state=RESOURCE_IO;

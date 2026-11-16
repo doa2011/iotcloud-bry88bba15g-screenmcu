@@ -28,7 +28,8 @@ void screen_startup_ui(const screen_model *m,uint32_t now) {
   /* HCHO is an optional extension. Never wait for a module that is not fitted. */
   const uint8_t expected=(1u<<MET_TEMP)|(1u<<MET_HUM)|(1u<<MET_CO2)|(1u<<MET_PM25)|(1u<<MET_TVOC);
   for(unsigned i=0;i<SCREEN_METRICS;i++)
-    if((expected&(1u<<i))&&screen_sample_valid(m,i,now))startup.received|=1u<<i;
+    if((expected&(1u<<i))&&(screen_sample_valid(m,i,now)||
+       (i==MET_TVOC&&m->tvoc_warmup_seconds_remaining>0)))startup.received|=1u<<i;
   bool sensors_ready=(startup.received&expected)==expected;
   bool sensors_wait=!sensors_ready&&(uint32_t)(now-startup.at)<SCREEN_SENSOR_STARTUP_MS;
   unsigned state=screen_font_resources.state;
