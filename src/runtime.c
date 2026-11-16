@@ -359,6 +359,7 @@ bool screen_runtime_sht(screen_runtime *s, const uint8_t frame[6],
       !sensor_sht_compensate(&s->sht, &s->sensor_config, frame, status, ramp,
                              force, &result))
     return false;
+  s->sht_result = result;
   screen_sample_set(&s->model, MET_TEMP, result.temperature10 / 10.0f, true,
                     now);
   screen_sample_set(&s->model, MET_HUM, result.humidity10 / 10.0f, true, now);
@@ -370,7 +371,7 @@ static bool calibration_fresh(const screen_runtime *s, unsigned i) {
       (!i || (!s->module.inhibited && !s->module.duration));
 }
 uint32_t screen_runtime_calibration_warmup(const screen_runtime *s, unsigned i) {
-  uint32_t required = i ? 320000 : 180000;
+  uint32_t required = (i ? 3196u : 1598u) * 1122u;
   if (!calibration_fresh(s, i) || !s->calibration_valid_since[i]) return required;
   uint32_t elapsed = s->now - s->calibration_valid_since[i];
   return elapsed >= required ? 0 : required - elapsed;
@@ -405,7 +406,9 @@ void screen_runtime_calibration_poll(screen_runtime *s, uint32_t age,
   if (!s) return;
   for (unsigned i=0;i<2;i++) {
     bool fresh = calibration_fresh(s, i);
-    if (!fresh) s->calibration_valid_since[i] = 0;
+    bool running = fresh || (i && s->air_owned && s->air.received &&
+        s->air.pm_status == 0x51 && !s->module.inhibited && !s->module.duration);
+    if (!running) s->calibration_valid_since[i] = 0;
     else if (!s->calibration_valid_since[i])
       s->calibration_valid_since[i] = s->now ? s->now : 1;
     calibration_job *j = &s->calibration.jobs[i];
@@ -413,6 +416,11 @@ void screen_runtime_calibration_poll(screen_runtime *s, uint32_t age,
       j->status = 0x55; j->issued = 0; j->stage = 8;
       s->calibration_result[i] = SCREEN_CAL_SENSOR_LOST;
     }
+  }
+  for(unsigned i=0;i<2;i++) if(s->calibration.pending & (1u<<i)) {
+    uint32_t run=s->calibration_valid_since[i] ?
+        (uint32_t)(s->now-s->calibration_valid_since[i])/1122u : 0;
+    if(run<age)age=run;
   }
   calibration_poll(&s->calibration, age, co2, tvoc,
                     s->calibration_event ? calibration_event : NULL, s);

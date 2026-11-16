@@ -56,6 +56,8 @@ int board_sensor_receive(unsigned);
 void board_sensor_flush(void);
 void board_module_write(void *, bool);
 bool board_module_read(void *);
+/* Preserve the full retained config page; change only stock +0x34. */
+bool board_sensor_stop_save(uint32_t);
 void board_sensor_checkpoint(unsigned) __attribute__((noinline));
 void board_rtc_init(void);
 bool board_rtc_read(void *, uint8_t, uint8_t *, size_t);

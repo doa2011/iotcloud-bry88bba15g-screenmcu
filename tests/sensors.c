@@ -33,6 +33,29 @@ static void same_cal(const sensor_calibration *a,const sensor_calibration *b){
  same_job(&a->jobs[0],&b->jobs[0]);same_job(&a->jobs[1],&b->jobs[1]);
 }
 int main(void){
+ sensor_air_state air;uint8_t command[12];bool save;
+ sensor_air_init(&air,0);sensor_air_receive(&air,true);
+ sensor_air_poll(&air,0,10000,1000,9,0x51,234,567,command,&save);
+ assert(air.mode==3 && air.tvoc_status==0x56);
+ sensor_air_poll(&air,1700000000,3609000,1000,9,0x51,234,567,command,&save);
+ assert(air.tvoc_status==0x56 && command[2]==0x0b && command[4]==1);
+ sensor_air_update(&air,1700000001,3610000);
+ assert(air.tvoc_status==0x51);
+ air.received=0;assert(sensor_air_update(&air,1700000010,3620000));
+ assert(!sensor_air_update(&air,1700000011,3621000));
+ for(unsigned gap=0;gap<3;gap++){
+  sensor_air_init(&air,1000);sensor_air_receive(&air,true);
+  sensor_air_update(&air,1000+(gap==0?3599:gap==1?3600:172801),20000);
+  assert(air.mode==(gap==0?1:gap==1?2:3));
+ }
+ sensor_air_init(&air,0);sensor_air_receive(&air,true);
+ sensor_air_update(&air,0,0xfffffff0u);
+ sensor_air_update(&air,0,1000);assert(air.tvoc_status==0x56);
+ sensor_air_update(&air,0,3600000u-16);assert(air.tvoc_status==0x51);
+ sensor_poll_state schedule={0};unsigned reads=0;
+ for(unsigned i=0;i<16;i++)if(sensor_poll_next(&schedule)==SENSOR_POLL_SHT_READ){assert(i==6||i==14);reads++;}
+ assert(reads==2 && sensor_pm25(1234,100)==300 && sensor_pm25(123,10)==12 && sensor_co2(65535)==5000);
+
  for(unsigned i=0;i<sizeof(sht_vectors)/sizeof(*sht_vectors);i++){
   const struct sht_vector *v=&sht_vectors[i];sensor_sht_state s=v->before;sensor_sht_result r;
   assert(sensor_sht_compensate(&s,&v->config,v->packet,v->status,v->ramp,v->force,&r));
@@ -105,6 +128,13 @@ int main(void){
   assert(!cal.pending&&reports==2&&commands==(scenario==1?2u:0u));
  }
  static screen_runtime runtime;
+ screen_runtime_init(&runtime);
+ runtime.air_owned=true;runtime.air.received=1;runtime.air.pm_status=0x51;
+ for(unsigned t=100;t<=3600100;t+=100){
+  runtime.now=t;screen_runtime_calibration_poll(&runtime,t/1122,400,100);
+ }
+ screen_sample_set(&runtime.model,MET_TVOC,100,true,runtime.now);
+ assert(!screen_runtime_calibration_warmup(&runtime,1));
  screen_runtime_init(&runtime);const struct sht_vector *first=&sht_vectors[0];
  assert(!screen_runtime_sht(&runtime,first->packet,0x51,false,false,10));
  assert(!screen_runtime_calibrate(&runtime,CAL_CO2));
@@ -115,14 +145,14 @@ int main(void){
  assert(screen_sample_valid(&runtime.model,MET_TEMP,10));
  struct log runtime_log={0};runtime.context=&runtime_log;runtime.calibration_event=capture;
  assert(!screen_runtime_calibration_service(&runtime,true,1,true,0));
- for(unsigned now=100;now<=330000;now+=100){
+ for(unsigned now=100;now<=3600000;now+=100){
   runtime.now=now;
   screen_sample_set(&runtime.model,MET_CO2,400,true,now);
   screen_sample_set(&runtime.model,MET_TVOC,100,true,now);
-  screen_runtime_calibration_poll(&runtime,now/100,400,100);
+  screen_runtime_calibration_poll(&runtime,now/1122,400,100);
  }
  runtime.co2_not_ready=true;
- assert(screen_runtime_calibration_warmup(&runtime,0)==180000);
+ assert(screen_runtime_calibration_warmup(&runtime,0)==1598u*1122);
  assert(!screen_runtime_calibration_service(&runtime,true,1,true,0));
  runtime.co2_not_ready=false;
  assert(!screen_runtime_calibration_warmup(&runtime,0));
@@ -136,7 +166,7 @@ int main(void){
  runtime.module.inhibited=true;
  screen_runtime_calibration_poll(&runtime,4000,400,100);
  assert(runtime.calibration_result[1]==SCREEN_CAL_SENSOR_LOST);
- assert(screen_runtime_calibration_warmup(&runtime,1)==320000);
+ assert(screen_runtime_calibration_warmup(&runtime,1)==3196u*1122);
  assert(screen_runtime_calibration_cancel(&runtime));
  runtime.module.inhibited=false;
  assert(screen_runtime_calibration_service(&runtime,true,1,true,0));

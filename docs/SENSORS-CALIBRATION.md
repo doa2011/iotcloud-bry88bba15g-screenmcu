@@ -41,7 +41,7 @@ mix 为 0 时输出 0，最终限 0..999；correctedT 为未限幅十分位温�
 
 | 传感器 | 原厂操作 | 社区接入 |
 | --- | --- | --- |
-| CO₂ | UART1 `11 03 03 01 90 58`，400 ppm 基准 | 连续有效读数预热 3 分钟；采样后发命令；识别 `16 01 03 E6` 应答 |
+| CO₂ | UART1 `11 03 03 01 90 58`，400 ppm 基准 | 运行至少约30分钟且当前读数有效；采样后发命令；识别 `16 01 03 E6` 应答 |
 | TVOC | UART2 `11 02 03 00 EA` | 模块连续运行并有有效读数 5 分 20 秒；使用未限幅原始值采样，发出原厂命令 |
 | 温湿度 | 出厂配置补偿 | 读取保留的补偿系数，不提供用户一键校准 |
 | 甲醛 | `hcho_install` 仅检查 token 并应答 | 不暴露为校准 |
@@ -63,3 +63,9 @@ mix 为 0 时输出 0，最终限 0..999；correctedT 为未限幅十分位温�
 主机测试保留原厂 CPU 输出 fixture：223 组温湿度、180 组校准单步、3 条完整双通道流程。另覆盖 CRC/截断、UART 发送失败、预热、模块停机、取消及 CO₂ 应答状态。原厂服务处理器 30 组解析后输入中，9 条空指针路径改为拒绝请求。
 
 这些检查验证命令和状态机；传感器精度需要参考仪或标准气体实测。
+
+## 原厂调度与恢复
+
+SHT 命令与读取交替占用400ms轮转槽，成功读数约每3.2秒推进一次热补偿。AM1008L读取与0x0B环境反馈交替，反馈使用补偿后十分位温湿度。停机不足1小时、1小时至2天、超过2天，分别预热5、30、60分钟；无可信RTC时采用60分钟单调计时，后来校时不改变该计时。PM可在TVOC预热56状态下继续发布。手动校准使用34×33ms原厂年龄计数，CO₂门槛>1597、TVOC>3195；TVOC预热期间累计运行年龄，但开始校准时仍须读数有效。
+
+SHT command/read alternate in the 400ms rotating slots, advancing compensation every3.2s. AM1008L read requests alternate with0x0B compensated-environment feedback. Off-times below1h,1h–2days, and over2days select5/30/60-minute warmup. An unknown RTC selects60 minutes measured monotonically; later clock correction cannot end warmup early. Manual calibration requires stock age>1597/3195 in34×33ms units, including TVOC warmup time, while current readings must be valid.

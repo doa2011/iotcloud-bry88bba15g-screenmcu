@@ -7,6 +7,7 @@
 #include "boot_control.h"
 #include "sensor_rx.h"
 #include "SWM341_timr.h"
+#include "SWM341_flash.h"
 #include "scene.h"
 #include "lvgl.h"
 #include <string.h>
@@ -815,6 +816,22 @@ void board_module_write(void *context, bool high) {
 bool board_module_read(void *context) {
   (void)context;
   return GPIO_GetBit(GPIOD, 12) != 0;
+}
+bool board_sensor_stop_save(uint32_t seconds) {
+  static uint32_t page[4096 / sizeof(uint32_t)];
+  const uint8_t *retained = (const uint8_t *)0x7e000;
+  /* An absent config record must not turn an erased page into a partial one. */
+  if (retained[0] != 0x5a) return false;
+  uint32_t previous;
+  memcpy(&previous, retained + 0x34, sizeof(previous));
+  if (previous == seconds) return true;
+  memcpy(page, retained, sizeof(page));
+  memcpy((uint8_t *)page + 0x34, &seconds, sizeof(seconds));
+  board_watchdog_feed();
+  if (FLASH_Erase(0x7e000) != FLASH_RES_OK ||
+      FLASH_Write(0x7e000, page, sizeof(page) / sizeof(*page)) != FLASH_RES_OK)
+    return false;
+  return !memcmp(retained, page, sizeof(page));
 }
 void board_sensor_init(void) {
   /* PD12 remains low until the display and business state are ready. */

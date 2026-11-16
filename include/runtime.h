@@ -28,12 +28,15 @@ typedef struct {
   scene_transaction scene_transfer;
   sensor_sht_config sensor_config;
   sensor_sht_state sht;
+  sensor_sht_result sht_result;
   bool sensor_config_valid;
   sensor_calibration calibration;
   uint32_t calibration_valid_since[2];
   /* Result survives the stock executor returning to its idle stage. */
   uint8_t calibration_result[2];
   bool co2_not_ready;
+  sensor_air_state air;
+  bool air_owned;
   screen_module module;
   calibration_emit calibration_event;
   void *context;
@@ -69,6 +72,8 @@ bool screen_runtime_sht(screen_runtime *, const uint8_t frame[6],
  * calibration_event must route CAL_COMMAND to the corresponding sensor UART.
  * Stock JSON decoding remains with the factory UART owner. */
 bool screen_runtime_calibrate(screen_runtime *, unsigned channels);
+/* age is the stock display-age counter (34 x 33 ms), additionally bounded by
+ * this channel's continuous valid run after any module stop/reset. */
 void screen_runtime_calibration_poll(screen_runtime *, uint32_t age,
                                      uint16_t co2, uint16_t tvoc);
 

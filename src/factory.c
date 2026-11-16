@@ -156,7 +156,9 @@ void factory_snapshot(factory_owner *f, const char *token, bool response) {
       value *= 10;
     cJSON_AddNumberToObject(s, names[i], value);
     cJSON_AddNumberToObject(s, states[i],
-                            valid ? 0x51
+                            i == MET_TVOC && f->runtime->air_owned &&
+                                f->runtime->air.tvoc_status == 0x56 ? 0x56
+                            : valid ? 0x51
                             : i == MET_HCHO && !(m->present & (1u << i))
                                 ? 0x59
                                 : 0x52);

@@ -79,9 +79,11 @@ static void recovery_latch(bool held) {
   fault_latch = held ? 0x52454356u : 0;
   __DSB();
 }
+static void air_stopped(void);
 static void power_off(void) {
   if (panel_ready) board_backlight(0);
   GPIO_ClrBit(GPIOD, 12);
+  if (normal_ready) air_stopped();
   GPIO_ClrBit(GPIOA, 5);
   GPIO_ClrBit(GPIOM, 7);
   recovery_latch(false);
@@ -257,6 +259,7 @@ static void maintenance_activity(void *context, bool active) {
         runtime.display.configured ? runtime.display.policy.ceiling : 100,
         false, true));
     screen_module_inhibit(&runtime.module, active || wallpaper.active || font_bank.active);
+    if (active) air_stopped();
     sensors_reset();
     screen_runtime_module_report(&runtime);
   }
@@ -264,7 +267,10 @@ static void maintenance_activity(void *context, bool active) {
 }
 static void wallpaper_activity(void *context,bool active) {
   (void)context;
-  if(normal_ready)screen_module_inhibit(&runtime.module,active || maintenance.state || wallpaper.active || font_bank.active);
+  if(normal_ready){
+    screen_module_inhibit(&runtime.module,active || maintenance.state || wallpaper.active || font_bank.active);
+    if(active)air_stopped();
+  }
 }
 static void maintenance_setup(void) {
   memset(&maintenance, 0, sizeof(maintenance));
@@ -501,6 +507,28 @@ static void sensors_reset(void) {
 }
 static uint8_t hcho_status = 0x59;
 static uint16_t tvoc_raw;
+static uint16_t pm25_raw;
+static bool pm25_calibrated;
+static uint32_t air_received_at;
+static void air_apply(void) {
+  bool running = runtime.air.pm_status == 0x51;
+  screen_sample_set(&runtime.model, MET_PM25, running ? pm25_raw : 0,
+                    running && pm25_calibrated, air_received_at);
+  screen_sample_set(&runtime.model, MET_TVOC,
+                    running ? (tvoc_raw > 2000 ? 2000 : tvoc_raw) : 0,
+                    runtime.air.tvoc_status == 0x51, air_received_at);
+}
+static void air_save_stop(bool save) {
+  if (save && runtime.model.clock_valid &&
+      board_sensor_stop_save(runtime.air.last_stop))
+    memcpy(factory.settings + 0x34, &runtime.air.last_stop, 4);
+}
+static void air_stopped(void) {
+  runtime.air.received = 0;
+  air_save_stop(sensor_air_update(&runtime.air, runtime.model.clock_valid ? runtime.clock_epoch : 0, runtime.now));
+  air_apply();
+  runtime.calibration_valid_since[1] = 0;
+}
 static void sensor_frame_read(unsigned index, uint32_t now) {
   sensor_rx_frame *f = &frames[index];
 #ifdef SCREEN_UART2_QUIET
@@ -522,23 +550,26 @@ static void sensor_frame_read(unsigned index, uint32_t now) {
       if (index == 0 && n == sizeof(calibration_ack) &&
           !memcmp(f->bytes, calibration_ack, sizeof(calibration_ack)))
         screen_runtime_calibration_ack(&runtime);
-      else if (index == 0 && sensor_uart_value(f->bytes, n, 1, &v) &&
-          v <= 5000) {
-        /* CM1106 status DF3: warm-up, sensor error, over/under range. The
-         * uncalibrated flag itself must not prevent a manual calibration. */
-        runtime.co2_not_ready = n >= 8 && (f->bytes[5] & 0x0f);
-        screen_sample_set(&runtime.model, MET_CO2, v, true, now);
+      else if (index == 0 && sensor_uart_value(f->bytes, n, 1, &v)) {
+        /* Original 0x2bf7c caps the value; it does not interpret an unproven
+         * CM1106 submodel's status-byte layout. */
+        screen_sample_set(&runtime.model, MET_CO2, sensor_co2(v), true, now);
       }
-      else if (index == 1 && n >= 12 &&
+      else if (index == 1 && board_module_read(NULL) && n >= 12 &&
                sensor_uart_value(f->bytes, n, 0x16, &v)) {
         runtime.module.frames++;
+        sensor_air_receive(&runtime.air, true);
         tvoc_raw = v;
-        screen_sample_set(&runtime.model, MET_TVOC, fminf(v, 2000), true, now);
         unsigned raw = (unsigned)f->bytes[9] << 8 | f->bytes[10];
         unsigned coefficient = factory.settings[12] | factory.settings[13] << 8;
-        if (coefficient >= 1 && coefficient <= 1000)
-          screen_sample_set(&runtime.model, MET_PM25,
-                            fminf(raw * 0.01f * coefficient, 300), true, now);
+        pm25_calibrated = coefficient >= 1 && coefficient <= 1000;
+        if (pm25_calibrated) pm25_raw = sensor_pm25(raw, coefficient);
+        air_received_at = now;
+        air_apply();
+      } else if (index == 1 && board_module_read(NULL) && n == 4 && f->bytes[0] == 0x16 &&
+                 f->bytes[1] == 1 && (f->bytes[2] == 3 || f->bytes[2] == 0x0b) &&
+                 (uint8_t)(f->bytes[0]+f->bytes[1]+f->bytes[2]+f->bytes[3]) == 0) {
+        sensor_air_receive(&runtime.air, false);
       } else if (index == 2 && sensor_hcho(f->bytes, n, &v, &hcho_status))
         screen_sample_set(&runtime.model, MET_HCHO, v, true, now);
       f->used = 0;
@@ -546,23 +577,15 @@ static void sensor_frame_read(unsigned index, uint32_t now) {
   }
 }
 static void sensors_tick(uint32_t now) {
-  static uint32_t next, read_at;
-  static unsigned slot;
-  static bool pending;
+  static uint32_t next;
+  static sensor_poll_state schedule;
   for (unsigned i = 0; i < 3; i++)
     sensor_frame_read(i, now);
-  if (pending && (int32_t)(now - read_at) >= 0) {
-    uint8_t raw[6];
-    if (board_sht_read(raw))
-      screen_runtime_sht(&runtime, raw, hcho_status, true, false, now);
-    pending = false;
-  }
   if ((int32_t)(now - next) < 0)
     return;
   next = now + 400;
-  static const uint8_t measure[] = {0x11, 1, 1, 0xed},
-                       air[] = {0x11, 1, 0x16, 0xd8};
-  switch (slot++ % 4) {
+  static const uint8_t measure[] = {0x11, 1, 1, 0xed};
+  switch (sensor_poll_next(&schedule)) {
   case 0:
     sensor_send(UART3, measure, sizeof(measure));
     break;
@@ -570,13 +593,28 @@ static void sensors_tick(uint32_t now) {
     sensor_send(UART1, measure, sizeof(measure));
     break;
   case 2:
-    pending = board_sht_command(0x2400);
-    read_at = now + 20;
+    board_sht_command(0x2400);
     break;
+  case SENSOR_POLL_SHT_READ: {
+    uint8_t raw[6];
+    if (board_sht_read(raw))
+      screen_runtime_sht(&runtime, raw, hcho_status, true, false, now);
+    break;
+  }
   case 3:
     /* Continue normal read requests during a manual SET-low lease, so missing
      * replies reflect the module hardware rather than a software pause. */
-    sensor_send(UART2, air, sizeof(air));
+    {
+      uint8_t frame[12];bool save;
+      if (runtime.air.missed >= 3) runtime.air.received = 0;
+      unsigned n = sensor_air_poll(&runtime.air, runtime.model.clock_valid ? runtime.clock_epoch : 0, now,
+          runtime.model.samples[MET_CO2].value,
+          runtime.model.samples[MET_HCHO].value, hcho_status,
+          runtime.sht_result.temperature10, runtime.sht_result.humidity10,
+          frame, &save);
+      air_save_stop(save);air_apply();
+      sensor_send(UART2, frame, n);
+    }
     break;
   }
 }
@@ -629,8 +667,10 @@ static void power_tick_board(void) {
     factory_provision(&factory);
   if (event & POWER_RESET)
     recovery_latch(false);
-  if (event & POWER_RESET)
+  if (event & POWER_RESET) {
+    air_stopped();
     NVIC_SystemReset();
+  }
   if (event & POWER_OFF) {
     power_off();
   }
@@ -809,6 +849,10 @@ void screen_start(void) {
   board_sensor_checkpoint(20);
   startup_checkpoint();
   screen_module_init(&runtime.module, NULL, board_module_write, board_module_read);
+  uint32_t last_stop;
+  memcpy(&last_stop, factory.settings + 0x34, sizeof(last_stop));
+  sensor_air_init(&runtime.air, last_stop);
+  runtime.air_owned = true;
   normal_ready = true;
   screen_startup_begin(board_ms);
   stage(STAGE_NORMAL);
@@ -832,6 +876,7 @@ void screen_start(void) {
     display_diag_poll();
     uint32_t now = board_ms;
     screen_runtime_tick(&runtime, now);
+    if (runtime.air_owned && !board_module_read(NULL)) air_stopped();
     bool media_busy=maintenance.state||wallpaper.active||font_bank.active;
     media_tick(&media,now,power.asleep||
       (runtime.display.configured?runtime.display.target==0:power.brightness==0),media_busy);
@@ -863,7 +908,7 @@ void screen_start(void) {
     }
     if (!maintenance.state && (int32_t)(now - next_cal) >= 0) {
       next_cal = now + 100;
-      screen_runtime_calibration_poll(&runtime, now / 100,
+      screen_runtime_calibration_poll(&runtime, now / 1122,
                                       runtime.model.samples[MET_CO2].value,
                                       tvoc_raw);
     }

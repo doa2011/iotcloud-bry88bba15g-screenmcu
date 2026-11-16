@@ -18,3 +18,24 @@ bool sensor_sht_compensate(sensor_sht_state *,const sensor_sht_config *,
  const uint8_t frame[6],uint8_t hcho_status,bool ramp,bool force,sensor_sht_result *);
 /* UART3 CMD=1 value and raw status. Wire units intentionally not guessed. */
 bool sensor_hcho(const uint8_t *,unsigned,uint16_t *,uint8_t *);
+/* Original 400 ms slots: HCHO, CO2, SHT command/read, AM1008L.
+ * A successful SHT result therefore advances compensation every 3.2 s. */
+enum { SENSOR_POLL_HCHO, SENSOR_POLL_CO2, SENSOR_POLL_SHT_COMMAND,
+       SENSOR_POLL_AIR, SENSOR_POLL_SHT_READ };
+typedef struct { uint8_t slot; bool sht_read; } sensor_poll_state;
+unsigned sensor_poll_next(sensor_poll_state *);
+uint16_t sensor_pm25(uint16_t raw, uint16_t coefficient);
+uint16_t sensor_co2(uint16_t raw);
+/* SV.04.00.04.00 0x4e374: mode 3/2/1 requests 60/30/5 minute warm-up.
+ * Times are RTC seconds. Only a transition from ready to stopped requests a
+ * retained timestamp write; callers must not save on every poll. */
+typedef struct {
+ uint32_t polls, started, last_stop;
+ uint8_t previous, phase, mode, received, missed, pm_status, tvoc_status;
+} sensor_air_state;
+void sensor_air_init(sensor_air_state *, uint32_t last_stop);
+void sensor_air_receive(sensor_air_state *, bool measurement);
+bool sensor_air_update(sensor_air_state *, uint32_t utc, uint32_t monotonic_ms);
+unsigned sensor_air_poll(sensor_air_state *, uint32_t utc, uint32_t monotonic_ms, uint16_t co2,
+ uint16_t hcho, uint8_t hcho_status, int32_t temperature10, int32_t humidity10,
+ uint8_t frame[12], bool *save_stop);
