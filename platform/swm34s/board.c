@@ -33,11 +33,11 @@ static void watchdog_settle(void) {
     __NOP();
 }
 static void watchdog_handoff(void) {
+  SYS->CLKEN0 |= SYS_CLKEN0_WDT_Msk;
   board_inherited_watchdog.control = WDT->CR;
   board_inherited_watchdog.reset_value = WDT->RSTVAL;
   board_inherited_watchdog.clock = SYS->CLKSEL;
   board_inherited_watchdog.reset_status = SYS->RSTSR;
-  SYS->CLKEN0 |= SYS_CLKEN0_WDT_Msk;
   /* Manual pp. 54/257: change clock source only while stopped, and wait
    * >= five source clocks after feeding before stopping. */
   WDT->CR &= ~(WDT_CR_WINEN_Msk | WDT_CR_INTEN_Msk);

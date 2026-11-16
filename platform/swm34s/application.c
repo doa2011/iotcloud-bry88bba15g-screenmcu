@@ -236,6 +236,10 @@ static void guard_restart(void *context) {
   board_module_write(NULL, false);
   recovery_latch(false);
   board_delay(30);
+  /* SDK WDT_Stop: the 30 ms without feeding exceeds the required five
+   * WDT source clocks between the last feed and stopping. */
+  WDT->CR &= ~WDT_CR_EN_Msk;
+  __DSB();
   /* Match the factory OTA reset handoff (0x17d98). The reply drains before
    * masking IRQs; the reset pulse must not depend on SysTick or TIMR. */
   __disable_irq();
