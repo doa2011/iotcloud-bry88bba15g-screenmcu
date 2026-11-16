@@ -92,25 +92,15 @@ static void tvoc_countdown(void) {
  model.tvoc_warmup_seconds_remaining=15;
  assert(screen_ui(&model,122000,false));draw();assert(!find(lv_scr_act(),"00:15"));
 }
-static void camera_absolute_scene(void) {
- const char *path=getenv("SCREEN_CAMERA_SCENE");if(!path)return;
- FILE *f=fopen(path,"rb");assert(f);uint8_t bytes[SCENE_BYTES];assert(fread(bytes,1,sizeof(bytes),f)==sizeof(bytes));fclose(f);
- screen_init(&model);assert(scene_decode(&model.scene,bytes,sizeof(bytes)));model.page=6;
+static void camera_alignment(void) {
+ screen_init(&model);scene(SC_IMAGE,4,6);model.scene.item[0].hide_title=1;
  stream_init(&stream);stream.width=320;stream.height=240;stream.revision++;
  for(unsigned y=0;y<240;y++)for(unsigned x=0;x<320;x++)stream.pixels[y*320+x]=lv_color_hex(x<160?0xff0000:0x00ff00).full;
  stream.pixel_crc=media_crc32(stream.pixels,320*240*2);
  assert(screen_ui(&model,120000,false));draw();
- lv_area_t root;lv_obj_get_content_coords(lv_scr_act(),&root);printf("root content %d %d %d %d\n",root.x1,root.y1,root.x2,root.y2);
- for(unsigned i=0;i<lv_obj_get_child_cnt(lv_scr_act());i++){
-  lv_obj_t *c=lv_obj_get_child(lv_scr_act(),i);if(lv_obj_get_width(c)!=480||lv_obj_get_y(c)!=66)continue;
-  lv_obj_t *clip=lv_obj_get_child(c,-1),*img=lv_obj_get_child(clip,0);lv_area_t a,b,d;lv_obj_get_coords(c,&a);lv_obj_get_coords(clip,&b);lv_obj_get_coords(img,&d);
-  lv_point_t pivot;lv_img_get_pivot(img,&pivot);
-  printf("camera abs %d %d %d %d clip %d %d %d %d img %d %d %d %d pivot %d %d zoom %u\n",a.x1,a.y1,a.x2,a.y2,b.x1,b.y1,b.x2,b.y2,d.x1,d.y1,d.x2,d.y2,pivot.x,pivot.y,lv_img_get_zoom(img));
- }
- artifact("camera-device-scene");
  /* Screen pixels independently confirm transformed bounds, including after
   * moving/resizing the scene and receiving another frame. */
- scene_item *it=NULL;for(unsigned n=0;n<model.scene.count;n++)if(model.scene.item[n].type==SC_IMAGE)it=&model.scene.item[n];assert(it);
+ scene_item *it=&model.scene.item[0];
  assert(frame[66*480]==lv_color_hex(0xff0000).full&&frame[425*480+479]==lv_color_hex(0x00ff00).full);
  it->h=3;it->y=1;assert(screen_ui(&model,120001,false));draw();
  lv_area_t bounds;lv_obj_t *camera=NULL;for(unsigned n=0;n<lv_obj_get_child_cnt(lv_scr_act());n++){lv_obj_t *o=lv_obj_get_child(lv_scr_act(),n);lv_obj_get_coords(o,&bounds);if(bounds.x1==0&&bounds.y1==196&&lv_obj_get_width(o)==480)camera=o;}assert(camera);
@@ -121,7 +111,7 @@ static void camera_absolute_scene(void) {
  stream.pixel_crc=media_crc32(stream.pixels,320*240*2);stream.revision++;
  assert(screen_ui(&model,120002,false));draw();assert(lv_obj_get_child(lv_obj_get_child(camera,-1),0)==img);
  assert(frame[209*480+3]==lv_color_hex(0x0000ff).full&&frame[550*480+470]==lv_color_hex(0x0000ff).full);
- artifact("camera-device-scene-moved-frame");
+ artifact("camera-alignment-moved-frame");
  for(unsigned n=0;n<4;n++){
   it->x=1;it->w=2;it->hide_title=n&1;stream.width=n<2?320:240;stream.height=n<2?241:321;
   for(unsigned j=0;j<stream.width*stream.height;j++)stream.pixels[j]=lv_color_hex(0x0000ff).full;
@@ -129,7 +119,6 @@ static void camera_absolute_scene(void) {
   assert(screen_ui(&model,120003+n,false));draw();
   unsigned top=196+12+(it->hide_title?0:48),first=0;
   for(unsigned y=196;y<578;y++)if(frame[y*480+240]==lv_color_hex(0x0000ff).full){first=y;break;}
-  if(first!=top)fprintf(stderr,"odd camera n%u first%u expected%u\n",n,first,top);
   assert(first==top);
  }
 
@@ -490,7 +479,7 @@ int main(void) {
  lv_disp_draw_buf_init(&buffer,pixels,NULL,SCREEN_WIDTH*16);
  lv_disp_drv_init(&display);display.hor_res=SCREEN_WIDTH;display.ver_res=SCREEN_HEIGHT;
  display.draw_buf=&buffer;display.flush_cb=flush;display.draw_ctx_init=screen_draw_ctx_init;lv_disp_drv_register(&display);
- camera_absolute_scene();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
+ camera_alignment();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  compact_layout();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  scene(SC_VALUE,2,2);screen_sample_set(&model,MET_CO2,628,true,120000);
  assert(screen_ui(&model,120000,false));draw();inside(card());
