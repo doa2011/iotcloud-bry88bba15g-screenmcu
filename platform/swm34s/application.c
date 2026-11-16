@@ -285,8 +285,8 @@ static void maintenance_setup(void) {
   maintenance.update.read = board_nor_read;
 }
 static void diagnostic_notice(void) {
-  uint8_t bytes[SCREEN_GUARD_DIAGNOSTIC_V3_BYTES] = {SCREEN_GUARD_DIAGNOSTIC, 3};
-  uint32_t words[20] = {recovery_reason, fault_record[0]};
+  uint8_t bytes[SCREEN_GUARD_DIAGNOSTIC_V4_BYTES] = {SCREEN_GUARD_DIAGNOSTIC, 4};
+  uint32_t words[24] = {recovery_reason, fault_record[0]};
   for (unsigned i = 0; i < 8; i++)
     words[2 + i] = previous_fault[i];
   words[10] = normal_ready ? (uint32_t)rtc.status : 0;
@@ -298,7 +298,8 @@ static void diagnostic_notice(void) {
   words[17] = control_expected;
   words[18] = control_address;
   words[19] = sensor_step;
-  for (unsigned i = 0; i < 20; i++)
+  board_uart_rx_diagnostic(words + 20);
+  for (unsigned i = 0; i < 24; i++)
     for (unsigned j = 0; j < 4; j++)
       bytes[2 + i * 4 + j] = words[i] >> (j * 8);
   char wire[192];
@@ -315,8 +316,17 @@ static void pump(void) {
     if (c == -1)
       break;
     if (c == -2) {
+      bool binary = (media_link_state.ready || media_uart.active) && !maintenance.state;
       screen_update_abort(&maintenance.update);
       maintenance_init(&maintenance);
+      /* Never splice a surviving suffix into either owner's partial frame.
+       * Negotiated binary traffic resumes only at a zero delimiter; stock
+       * text/raw-OTA recovery discards through its next line boundary. */
+      maintenance.discard = true;
+      if (binary)
+        media_resync(&media_uart, board_ms);
+      else
+        media_reset(&media_uart);
       continue;
     }
     /* Factory OTA owns raw bytes exclusively; the zero-delimited media

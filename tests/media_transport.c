@@ -48,6 +48,24 @@ int main(void) {
   for(unsigned i=0;i<n-1;i++)media_feed(&parser,wire[i],1011); /* Lost ending. */
   for(unsigned j=0;j<3;j++)for(unsigned i=0;i<n;i++)media_feed(&parser,wire[i],1012+j);
   assert(calls>=6&&parser.framing_errors>=3);
+  /* Every known-loss position quarantines the partial record, even across
+   * the usual parser timeout, then accepts exactly the next complete record. */
+  for (size_t cut=1;cut<n;cut++) {
+    media_reset(&parser);
+    for(size_t i=0;i<cut;i++)media_feed(&parser,wire[i],2000);
+    unsigned before=calls; uint32_t errors=parser.framing_errors;
+    media_resync(&parser,2001);
+    const char *suffix="version?\r\n";
+    for(size_t i=0;suffix[i];i++)assert(media_feed(&parser,suffix[i],4002));
+    assert(calls==before&&parser.resync);
+    for(size_t i=cut;i<n;i++)media_feed(&parser,wire[i],4003);
+    for(size_t i=0;i<n;i++)media_feed(&parser,wire[i],4004);
+    assert(calls==before+1&&!parser.resync);
+    assert(parser.framing_errors==errors);
+    media_resync(&parser,4005); media_reset(&parser);
+    assert(!media_feed(&parser,'v',4006));
+    assert(parser.packet==packet&&parser.framing_errors==errors);
+  }
   assert(!media_encode(wire,4,0,1,1,expected,640));
   assert(!media_encode(wire,sizeof(wire),0,0,1,expected,1));
 }

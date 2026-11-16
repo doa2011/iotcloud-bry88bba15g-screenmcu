@@ -41,15 +41,25 @@ int main(void) {
   }
   maintenance.state = 0;
   board_ms += 40000;
+  media_resync(&media_uart,board_ms);
   media_board_maintenance_released();
+  assert(!media_uart.resync&&!media_uart.active);
   board_ms += 9999; media_board_link_poll();
   assert(!baud_changes && media_link_state.ready);
+  media_resync(&media_uart,board_ms);
   board_ms += 2; media_board_link_poll();
+  assert(!media_uart.resync&&!media_uart.active);
   assert(baud_changes == 1 && media_link_state.rate == 115200);
   assert(!media_link_state.ready && guard_announce_at == board_ms);
   uint8_t ping[5] = {MEDIA_PING, 1};
   media_board_packet(NULL, MEDIA_LINK, guard.session, 1, ping, sizeof(ping));
   assert(media_link_state.ready);
+  media_resync(&media_uart,board_ms);
+  board_ms += 10001; media_board_link_poll();
+  assert(!media_link_state.ready&&!media_uart.resync&&!media_uart.active);
+  assert(!media_feed(&media_uart,'v',board_ms));
+  media_board_packet(NULL, MEDIA_LINK, guard.session, 2, ping, sizeof(ping));
+  normal_ready = true;
   media_init(&media);stream_init(&stream);media_source_init(&media_source);
   uint8_t push[535]={MEDIA_PUSH_URL};media_put32(push+1,90);media_put32(push+9,1000);push[13]=1;push[14]=30;
   memcpy(push+16,media_source.page,519);push[22]=3;strcpy((char *)push+23,"http://camera.test/event");

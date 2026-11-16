@@ -147,6 +147,7 @@ static void media_board_packet(void *ctx, unsigned channel, uint32_t session,
   }
 }
 static void media_board_maintenance_released(void) {
+  media_reset(&media_uart);
   // A synchronous NOR rehash can finish the last two OTA phases in one pump.
   // Give the media owner a fresh heartbeat grace period even in that case.
   media_link_state.last_ping = board_ms;
@@ -167,7 +168,7 @@ static void media_board_link_poll(void) {
     } else
       media_link_state.deadline = now;
     maintenance.used = 0;
-    media_uart.active = false;
+    media_reset(&media_uart);
   }
   if ((media_link_state.phase &&
        (int32_t)(now - media_link_state.deadline) >= 0) ||
@@ -177,13 +178,15 @@ static void media_board_link_poll(void) {
     media_link_state.rate = 115200;
     media_link_state.phase = 0;
     media_link_state.ready = false;
-    media_uart.active = false;
+    media_reset(&media_uart);
     maintenance.used = 0;
     guard_announce_at = now;
   }
   if (media_link_state.ready &&
-      (uint32_t)(now - media_link_state.last_ping) > 10000)
+      (uint32_t)(now - media_link_state.last_ping) > 10000) {
     media_link_state.ready = false;
+    media_reset(&media_uart);
+  }
 }
 
 static void media_board_socket_poll(void) {

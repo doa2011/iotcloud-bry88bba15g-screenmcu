@@ -38,6 +38,8 @@ void board_backlight(unsigned);
 unsigned board_backlight_percent(void);
 bool board_send(void *, const char *, size_t);
 int board_receive(void);
+/* IRQ loss aggregates; read through the maintenance diagnostic snapshot. */
+void board_uart_rx_diagnostic(uint32_t words[4]);
 void board_delay(unsigned);
 void board_idle(void);
 void board_recovery(void) __attribute__((noreturn));

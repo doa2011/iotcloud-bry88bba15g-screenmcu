@@ -84,7 +84,9 @@ bool board_boot_read(void *context, uint32_t offset, void *out, size_t n) {
 }
 static uint8_t rx[4096] IRAM;
 static volatile unsigned read_at IRAM, write_at IRAM;
-static bool overflow IRAM;
+static volatile bool overflow IRAM;
+static volatile uint32_t rx_overruns IRAM, rx_dropped IRAM,
+    rx_loss_resets IRAM, rx_last_loss IRAM;
 static sensor_rx sensor_queues[3] IRAM;
 static void sensor_interrupt(unsigned index,UART_TypeDef *u) {
   /* Drain the eight-byte hardware FIFO while NOR/font/render work runs. */
@@ -222,12 +224,23 @@ uint32_t board_nonce(void *context) {
 }
 void UART0_Handler(void) {
   uint32_t c;
+  /* SWM34S v1.39 p296: CTRL.RXOV is W1C. Preserve all control bits;
+   * count observed overflow events, not an unknowable number of lost bytes. */
+  uint32_t control = UART0->CTRL;
+  if (control & UART_CTRL_RXOV_Msk) {
+    UART0->CTRL = control | UART_CTRL_RXOV_Msk;
+    ++rx_overruns;
+    rx_last_loss = board_ms;
+    overflow = true;
+  }
   while (!UART_IsRXFIFOEmpty(UART0)) {
     UART_ReadByte(UART0, &c);
     unsigned next = (write_at + 1) % sizeof(rx);
-    if (next == read_at)
+    if (next == read_at) {
       overflow = true;
-    else {
+      ++rx_dropped;
+      rx_last_loss = board_ms;
+    } else {
       rx[write_at] = c;
       write_at = next;
     }
@@ -236,10 +249,12 @@ void UART0_Handler(void) {
 }
 int board_receive(void) {
   if (overflow) {
+    uint32_t mask = __get_PRIMASK();
     __disable_irq();
     read_at = write_at;
     overflow = false;
-    __enable_irq();
+    ++rx_loss_resets;
+    __set_PRIMASK(mask);
     return -2;
   }
   if (read_at == write_at)
@@ -247,6 +262,15 @@ int board_receive(void) {
   int c = rx[read_at];
   read_at = (read_at + 1) % sizeof(rx);
   return c;
+}
+void board_uart_rx_diagnostic(uint32_t words[4]) {
+  uint32_t mask = __get_PRIMASK();
+  __disable_irq();
+  words[0] = rx_overruns;
+  words[1] = rx_dropped;
+  words[2] = rx_loss_resets;
+  words[3] = rx_last_loss;
+  __set_PRIMASK(mask);
 }
 bool board_send(void *ctx, const char *s, size_t n) {
   (void)ctx;
