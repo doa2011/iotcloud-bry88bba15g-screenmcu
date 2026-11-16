@@ -520,6 +520,8 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
   int x=UI_MARGIN+it->x*UI_COLUMN_PITCH,y=UI_GRID_TOP+it->y*UI_ROW_PITCH;
   int w=it->w*UI_COLUMN_PITCH-UI_GRID_GAP,h=it->h*UI_ROW_PITCH-UI_GRID_GAP;
   bool clock=it->type==SC_CLOCK;
+  bool monitor=it->type==SC_IMAGE&&it->w==4&&it->h==6;
+  if(monitor){x=0;w=SCREEN_WIDTH;}
   custom=appearance_find(appearance,it->id);
   lv_obj_t *c=existing?existing:box(root,x,y,w,h,wc(0),12);
   reuse_labels=(clock||it->type==SC_VALUE)?c:NULL;reuse_index=0;
@@ -527,8 +529,8 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
   unsigned alpha=it->type==SC_IMAGE?0:appearance_opacity(appearance,custom,it->type,it->h,have_wallpaper);
   lv_obj_set_style_bg_opa(c,alpha*255/100,0);
   if(have_wallpaper) {lv_obj_set_style_border_width(c,it->type==SC_IMAGE?0:1,0);lv_obj_set_style_border_color(c,lv_color_hex(appearance_color(appearance,AP_LINE)),0);lv_obj_set_style_border_opa(c,alpha*100/100,0);}
-  int pad=clock?0:12;w-=pad*2;h-=24;
-  lv_obj_set_style_pad_left(c,pad,0);lv_obj_set_style_pad_top(c,12,0);
+  int pad=clock||monitor?0:12;w-=pad*2;h-=monitor?0:24;
+  lv_obj_set_style_pad_left(c,pad,0);lv_obj_set_style_pad_top(c,monitor?0:12,0);
   const scene_data *d=data_for(m,it->id);bool fresh=scene_data_fresh(d,now);
   char b[256];
   if(clock) {

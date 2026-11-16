@@ -102,6 +102,16 @@ static void media_and_battery(void) {
  }
  assert(camera);lv_obj_t *clip=lv_obj_get_child(camera,0),*camera_image=lv_obj_get_child(clip,0);
  assert(camera_image&&lv_obj_check_type(camera_image,&lv_img_class));
+ assert(lv_obj_get_x(camera)==0&&lv_obj_get_width(camera)==480);
+ assert(lv_obj_get_width(clip)==480&&lv_img_get_zoom(camera_image)==384);
+ /* Native monitor expansion is independent of source stream resolution. */
+ const unsigned widths[]={160,480,320};
+ for(unsigned n=0;n<3;n++){
+  stream.width=widths[n];stream.height=widths[n]*3/4;stream.revision++;
+  assert(screen_ui(&model,120000,false));draw();
+  camera_image=lv_obj_get_child(lv_obj_get_child(camera,0),0);
+  assert(lv_img_get_zoom(camera_image)==480u*256/widths[n]);
+ }
   for(unsigned i=0;i<480*854;i++)image[i]=0x1234;
   wallpaper.pixels=image;wallpaper.kind=1;wallpaper.ready=true;
   model.appearance.wallpaper=1;model.appearance.dim=0;
