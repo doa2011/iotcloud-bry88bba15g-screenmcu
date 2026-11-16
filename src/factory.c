@@ -168,6 +168,8 @@ void factory_snapshot(factory_owner *f, const char *token, bool response) {
   cJSON_AddNumberToObject(cal, "pending", f->runtime->calibration.pending);
   for (unsigned i=0;i<2;i++) {
     cJSON *job = object(cal, i ? "tvoc" : "co2");
+    if (!i && f->runtime->co2_raw_captured)
+      cJSON_AddNumberToObject(job, "raw_ppm", f->runtime->co2_raw);
     const calibration_job *j = &f->runtime->calibration.jobs[i];
     unsigned result = f->runtime->calibration_result[i];
     bool active = (f->runtime->calibration.pending & (1u<<i)) != 0;

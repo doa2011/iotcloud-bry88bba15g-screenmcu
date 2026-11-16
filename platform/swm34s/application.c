@@ -553,6 +553,7 @@ static void sensor_frame_read(unsigned index, uint32_t now) {
       else if (index == 0 && sensor_uart_value(f->bytes, n, 1, &v)) {
         /* Original 0x2bf7c caps the value; it does not interpret an unproven
          * CM1106 submodel's status-byte layout. */
+        runtime.co2_raw=v;runtime.co2_raw_captured=true;
         screen_sample_set(&runtime.model, MET_CO2, sensor_co2(v), true, now);
       }
       else if (index == 1 && board_module_read(NULL) && n >= 12 &&

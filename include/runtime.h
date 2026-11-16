@@ -34,7 +34,8 @@ typedef struct {
   uint32_t calibration_valid_since[2];
   /* Result survives the stock executor returning to its idle stage. */
   uint8_t calibration_result[2];
-  bool co2_not_ready;
+  bool co2_not_ready, co2_raw_captured;
+  uint16_t co2_raw;
   sensor_air_state air;
   bool air_owned;
   screen_module module;
