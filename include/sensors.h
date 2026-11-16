@@ -27,7 +27,8 @@ unsigned sensor_poll_next(sensor_poll_state *);
 uint16_t sensor_pm25(uint16_t raw, uint16_t coefficient);
 uint16_t sensor_co2(uint16_t raw);
 /* SV.04.00.04.00 0x4e374: mode 3/2/1 requests 60/30/5 minute warm-up.
- * Times are RTC seconds. Only a transition from ready to stopped requests a
+ * UTC/retained stops use seconds; warmup uses wrap-safe monotonic milliseconds.
+ * Only a transition from ready to stopped requests a
  * retained timestamp write; callers must not save on every poll. */
 typedef struct {
  uint32_t polls, started, last_stop;
