@@ -236,6 +236,20 @@ static void guard_restart(void *context) {
   board_module_write(NULL, false);
   recovery_latch(false);
   board_delay(30);
+  /* Match the factory OTA reset handoff (0x17d98). The reply drains before
+   * masking IRQs; the reset pulse must not depend on SysTick or TIMR. */
+  __disable_irq();
+  for (unsigned i = 0; i < 3; i++)
+    NVIC->ICER[i] = UINT32_MAX;
+  SYS->PRSTEN = 0x55;
+  SYS->PRSTR0 = SYS_PRSTR0_GPIOA_Msk | SYS_PRSTR0_TIMR_Msk;
+  __DSB();
+  for (volatile unsigned i = 0; i < CyclesPerUs; i++)
+    __NOP();
+  SYS->PRSTR0 = 0;
+  SYS->PRSTR1 = 0;
+  SYS->PRSTEN = 0;
+  __DSB();
   NVIC_SystemReset();
 }
 static uint32_t maintenance_clock(void *context) {
