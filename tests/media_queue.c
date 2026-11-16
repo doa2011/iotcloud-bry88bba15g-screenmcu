@@ -72,4 +72,22 @@ int main(void) {
   media_button(&m,19020,false,false,false,true);media_button(&m,19400,false,false,false,false);assert(m.active==2);
   /* The double-tap window is safe across the millisecond counter wrapping. */
   media_select(&m,0);media_button(&m,UINT32_MAX-100,false,true,true,false);media_button(&m,49,false,true,true,false);assert(m.active==2);
+  /* Ordinary pages delay a single tap and recognize home without changing notifications. */
+  media_init(&m);
+  assert(!media_button(&m,100,false,true,false,false)&&!m.tap_pending); /* Wake-only release. */
+  assert(!media_button(&m,200,false,true,true,false));
+  assert(media_button(&m,551,false,false,false,false)==1); /* Next qualified tap is only a single. */
+  assert(!media_button(&m,1000,false,true,true,false));
+  assert(media_button(&m,1200,false,true,true,false)==2);
+  assert(!media_button(&m,1551,false,false,false,false)); /* No delayed stray single. */
+  media_button(&m,2000,false,true,true,false);media_button(&m,2100,true,false,false,true);
+  assert(!media_button(&m,2400,false,false,false,false)); /* Long press cancels. */
+  media_button(&m,3000,false,true,true,false);
+  assert(push(77,true,false,0)==MEDIA_OK);media_tick(&m,3001,false,false);media_present(&m);
+  assert(!media_button(&m,3100,false,true,true,false));
+  assert(media_count(&m)==1); /* New notification owns this tap, never home. */
+  media_button(&m,3451,false,false,false,false);assert(!media_count(&m));
+  media_button(&m,4000,false,true,true,false);
+  assert(media_button(&m,4200,false,true,true,false)==2);
+
 }

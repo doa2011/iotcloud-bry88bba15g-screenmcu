@@ -36,6 +36,7 @@ typedef struct {
   uint32_t tvoc_warmup_seconds_remaining;
   screen_point history[SCREEN_HISTORY];
   unsigned head, count, page;
+  uint32_t home_page_id;
   bool asleep, clock_valid, network;
   unsigned hour, minute, battery_percent;
   uint32_t local_day;

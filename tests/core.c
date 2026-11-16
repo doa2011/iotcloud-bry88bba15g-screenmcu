@@ -9,6 +9,13 @@ static screen_model m;
 int main(void){
  screen_init(&m);assert(!screen_sample_valid(&m,0,0));m.asleep=true;screen_event(&m,1);assert(!m.asleep&&m.page==0);
  for(unsigned i=0;i<m.scene.pages;i++)screen_event(&m,1);assert(m.page==0);screen_event(&m,1);screen_event(&m,2);assert(m.page==0);
+ m.home_page_id=m.scene.page[3].id;screen_event(&m,2);assert(m.page==3);
+ scene_page swap=m.scene.page[1];m.scene.page[1]=m.scene.page[3];m.scene.page[3]=swap;
+ screen_event(&m,2);assert(m.page==1); /* Stable home follows page reordering. */
+ m.scene.page[1].enabled=false;m.scene.page[0].enabled=false;
+ screen_event(&m,2);assert(m.page==2); /* Disabled/missing home falls to first enabled. */
+ m.home_page_id=0;screen_event(&m,2);assert(m.page==2);
+ screen_init(&m);
  screen_sample_set(&m,0,23,true,UINT32_MAX-100);assert(screen_sample_valid(&m,0,5));assert(!screen_sample_valid(&m,0,20000));
  screen_sample_set(&m,0,NAN,true,0);assert(!screen_sample_valid(&m,0,0));
  for(unsigned i=0;i<1500;i++){screen_sample_set(&m,2,600,true,i*60000);screen_record(&m,i*60000);screen_record(&m,i*60000);}

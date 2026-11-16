@@ -42,8 +42,8 @@ unsigned media_count(const screen_media *);
 unsigned media_view(const screen_media *);
 const media_notice *media_at(const screen_media *, unsigned index);
 unsigned media_select(screen_media *, unsigned index);
-/* Returns one only when an ordinary page tap has survived the double-tap
- * window. Notification confirmation and double-tap navigation are consumed. */
+/* Normal pages: 1 after the single-tap window, 2 for double-tap home.
+ * Notification confirmation and double-tap stack navigation are consumed. */
 unsigned media_button(screen_media *, uint32_t now, bool down, bool released,
                       bool page_tap, bool blocked);
 void media_present(screen_media *);

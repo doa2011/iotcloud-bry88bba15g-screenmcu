@@ -26,34 +26,57 @@ static uint32_t occurrence(const display_policy *p, uint32_t utc, int16_t tz,
   return 0;
 }
 void display_step(display_state *s, uint32_t now, uint32_t utc, int16_t tz,
-                  bool battery, unsigned normal, uint8_t pages, unsigned *page,
+                  bool battery, unsigned normal, const screen_scene *scene, unsigned *page,
                   bool wake, bool activity, bool ota) {
   if (!s->configured || !page) return;
   if (ota) { s->activity = now; return; }
   unsigned index = 0;
   uint32_t key = occurrence(&s->policy, utc, tz, &index);
+  uint8_t pages = 0;
+  for (unsigned i = 0; i < scene->pages; i++)
+    if (scene->page[i].enabled) pages |= 1u << i;
   unsigned wait = battery ? s->policy.battery_minutes : s->policy.external_minutes;
+  unsigned global_wait = wait;
+  unsigned idle_brightness = s->policy.idle_brightness;
+  uint32_t source_id = s->sleeping ? s->saved_page_id :
+      *page < scene->pages ? scene->page[*page].id : 0;
+  if (source_id)
+    for (unsigned i = 0; i < s->policy.page_count; i++) {
+      const display_page_override *r = &s->policy.page_overrides[i];
+      if (r->page_id != source_id) continue;
+      wait = battery ? r->battery_minutes : r->external_minutes;
+      idle_brightness = r->idle_brightness;
+      break;
+    }
   if (activity || wake) s->activity = now;
   if (wake) s->wake_occurrence = key;
   uint32_t elapsed = now - s->activity;
   bool planned = key && (key != s->wake_occurrence ||
-                         elapsed >= (wait ? wait : 1) * 60000u);
+                         elapsed >= (global_wait ? global_wait : 1) * 60000u);
   bool idle = wait && elapsed >= wait * 60000u;
   bool sleep = planned || idle;
   unsigned destination = DISPLAY_KEEP_PAGE;
-  if (sleep && !s->sleeping) s->saved_page = *page;
+  if (sleep && !s->sleeping) {
+    s->saved_page_id = source_id;
+  }
   s->reason = planned ? 2 : idle ? 1 : 0;
   s->target = normal > 100 ? 100 : normal;
   if (planned) {
     s->target = s->policy.plans[index].brightness;
     destination = s->policy.plans[index].page;
   } else if (idle) {
-    s->target = s->policy.idle_brightness;
+    s->target = idle_brightness;
     destination = s->policy.idle_page;
   }
   if (sleep && destination < SCENE_PAGES && (pages & (1u << destination)))
     *page = destination;
-  else if (!sleep && s->sleeping && s->saved_page < SCENE_PAGES &&
-           (pages & (1u << s->saved_page))) *page = s->saved_page;
+  else if (!sleep && s->sleeping) {
+    bool found = false;
+    for (unsigned i = 0; i < scene->pages; i++) {
+      if (!scene->page[i].enabled) continue;
+      if (!found) { *page = i; found = true; }
+      if (scene->page[i].id == s->saved_page_id) { *page = i; break; }
+    }
+  }
   s->sleeping = sleep; s->occurrence = key;
 }

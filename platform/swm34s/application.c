@@ -659,13 +659,10 @@ static void power_tick_board(void) {
   bool consumed=notification||media.tap_pending;
   if(notification)activity=false;
   if (extended) {
-    uint8_t pages = 0;
-    for (unsigned i = 0; i < runtime.model.scene.pages; i++)
-      if (runtime.model.scene.page[i].enabled) pages |= 1u << i;
     display_step(&runtime.display, board_ms,
                   runtime.model.clock_valid ? runtime.clock_epoch : 0,
                   runtime.timezone, !runtime.model.charging, power.brightness,
-                  pages, &runtime.model.page, false, false, power.ota);
+                  &runtime.model.scene, &runtime.model.page, false, false, power.ota);
     power.asleep = runtime.display.sleeping;
   }
   unsigned event =
@@ -674,7 +671,7 @@ static void power_tick_board(void) {
   unsigned page_tap=media_button(&media,board_ms,front_down,released,
                                  (event & POWER_PAGE)!=0,power.ota||power.front_long);
   if (page_tap)
-    screen_event(&runtime.model, 1);
+    screen_event(&runtime.model, page_tap);
   if (event & POWER_PROVISION)
     factory_provision(&factory);
   if (event & POWER_RESET)
@@ -687,13 +684,10 @@ static void power_tick_board(void) {
     power_off();
   }
   if (extended) {
-    uint8_t pages = 0;
-    for (unsigned i = 0; i < runtime.model.scene.pages; i++)
-      if (runtime.model.scene.page[i].enabled) pages |= 1u << i;
     display_step(&runtime.display, board_ms,
                   runtime.model.clock_valid ? runtime.clock_epoch : 0,
                   runtime.timezone, !runtime.model.charging, power.brightness,
-                  pages, &runtime.model.page, ((!notification&&!consumed)&&(event & POWER_WAKE)) || reminder,
+                  &runtime.model.scene, &runtime.model.page, ((!notification&&!consumed)&&(event & POWER_WAKE)) || reminder,
                   activity, power.ota);
     if (reminder) runtime.model.page = reminder_page;
     power.asleep = runtime.display.sleeping;

@@ -56,6 +56,7 @@ static void receive(void *context, const char *line, size_t length) {
     s->offered = false;
     s->diag_pending = false;
     s->display.configured = false;
+    s->model.home_page_id = 0;
     return;
   }
   if (length >= 13 && !memcmp(line, "+screen_caps:", 13)) {
@@ -113,8 +114,13 @@ static void receive(void *context, const char *line, size_t length) {
     } else if (used && payload[0] == SCREEN_MSG_POLICY &&
         (s->caps.capabilities & SCREEN_CAP_DISPLAY)) {
       display_policy candidate;
-      ok = display_policy_decode(&candidate, payload, used);
-      if (ok) display_configure(&s->display, &candidate, s->now);
+      ok = (used > 1 && (payload[1] == 1 ||
+            (s->caps.capabilities & SCREEN_CAP_PAGE_POLICY))) &&
+           display_policy_decode(&candidate, payload, used);
+      if (ok) {
+        display_configure(&s->display, &candidate, s->now);
+        s->model.home_page_id = candidate.home_page_id;
+      }
       uint8_t ack[7] = {SC_MSG_ACK, SCREEN_MSG_POLICY, ok ? 0 : 1};
       scene_put32(ack + 3, s->display.policy.revision);
       char reply[128];

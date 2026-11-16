@@ -23,8 +23,19 @@ void screen_event(screen_model *m, unsigned clicks) {
     m->asleep = false;
     return;
   }
-  if (clicks == 2)
-    m->page = 0;
+  if (clicks == 2) {
+    unsigned first = 0;
+    bool found = false;
+    for (unsigned i = 0; i < m->scene.pages; i++) {
+      if (!m->scene.page[i].enabled) continue;
+      if (!found) { first = i; found = true; }
+      if (m->home_page_id && m->scene.page[i].id == m->home_page_id) {
+        m->page = i;
+        return;
+      }
+    }
+    m->page = first;
+  }
   else if (clicks == 1)
     for (unsigned i = 0; i < m->scene.pages; i++) {
       m->page = (m->page + 1) % m->scene.pages;

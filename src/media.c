@@ -224,12 +224,15 @@ unsigned media_button(screen_media *m, uint32_t now, bool down, bool released,
     return 0;
   }
   unsigned page = 0;
+  /* A notification arriving between normal-page taps starts a new context. */
+  if (m->tap_pending && !m->tap_target && !m->parked && media_count(m))
+    m->tap_pending = false;
   if (m->tap_pending && (uint32_t)(now - m->tap_at) > MEDIA_TAP_WINDOW_MS) {
     m->tap_pending = false;
     if (!down) {
       if (m->tap_target && m->active == m->tap_target)
         media_touch(m);
-      else if (!m->tap_target && !m->active && m->parked)
+      else if (!m->tap_target && !m->active && (m->parked || !media_count(m)))
         page = m->tap_page;
     }
   }
@@ -244,10 +247,10 @@ unsigned media_button(screen_media *m, uint32_t now, bool down, bool released,
       unsigned next = media_view(m) + 1;
       media_select(m, next > limit ? 0 : next);
     }
-    return page;
+    return limit ? page : (!m->tap_target && m->tap_page && page_tap ? 2 : page);
   }
-  if (!media_count(m))
-    return page || page_tap;
+  if (!media_count(m) && !page_tap)
+    return page;
   m->tap_pending = true;
   m->tap_page = page_tap;
   m->tap_target = m->active;
