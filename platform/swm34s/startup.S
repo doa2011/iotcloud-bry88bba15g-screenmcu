@@ -127,6 +127,13 @@ Reset_Handler:
  msr basepri, r0
  isb
  ldr sp, =__StackTop
+ /* Enable single-precision FPU before any compiler-generated C prologue. */
+ ldr r0, =0xe000ed88
+ ldr r1, [r0]
+ orr r1, r1, #0x00f00000
+ str r1, [r0]
+ dsb
+ isb
  bl screen_start
  b .
 .weak NMI_Handler

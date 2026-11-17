@@ -360,18 +360,22 @@ static bool prepare_plot(plot_data *p,const screen_model *m,const scene_item *it
     for(unsigned k=0;k<p->count;k++) {
       unsigned b=binding[k];if(b>=SCREEN_METRICS||b==MET_HCHO)return false;
       snprintf(p->names[k],32,"%.31s",screen_translate(english,metric_name(b)));strcpy(p->units[k],metric_unit(b));
+      double sums[256]={0};
+      uint16_t counts[256]={0};
+      bool gaps[256]={false};
+      uint32_t window=minutes*60000u;
+      for(unsigned j=0;j<m->count;j++) {
+        const screen_point *point=&m->history[(m->head+SCREEN_HISTORY-m->count+j)%SCREEN_HISTORY];
+        uint32_t age=(now/60000-point->minute)*60000u;
+        if(age>=window)continue;
+        /* Original buckets contain begin < window-age <= end. */
+        unsigned i=((uint64_t)(window-age)*p->n-1)/window;
+        if(point->valid&(1u<<b)){sums[i]+=point->values[b];counts[i]++;}
+        else gaps[i]=true;
+      }
       for(unsigned i=0;i<p->n;i++) {
-        uint32_t end=(uint32_t)((uint64_t)(i+1)*minutes*60000/p->n);
-        uint32_t begin=(uint32_t)((uint64_t)i*minutes*60000/p->n);
-        double sum=0;unsigned n=0;bool gap=false;
-        for(unsigned j=0;j<m->count;j++) {
-          const screen_point *point=&m->history[(m->head+SCREEN_HISTORY-m->count+j)%SCREEN_HISTORY];
-          uint32_t age=now/60000-point->minute;
-          if(age*60000<minutes*60000-end || age*60000>=minutes*60000-begin) continue;
-          if(point->valid&(1u<<b)){sum+=point->values[b];n++;}else gap=true;
-        }
-        if(n&&!gap){p->values[k][i]=sum/n;p->mask[k][i/32]|=1u<<(i%32);}
-        else if(i+1==p->n && !n && screen_sample_valid(m,b,now)) {
+        if(counts[i]&&!gaps[i]){p->values[k][i]=sums[i]/counts[i];p->mask[k][i/32]|=1u<<(i%32);}
+        else if(i+1==p->n&&!counts[i]&&screen_sample_valid(m,b,now)) {
           p->values[k][i]=m->samples[b].value;p->mask[k][i/32]|=1u<<(i%32);
         }
       }
