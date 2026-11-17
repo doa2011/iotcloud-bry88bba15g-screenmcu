@@ -73,8 +73,8 @@ bool sensor_air_update(sensor_air_state *s,uint32_t utc,uint32_t now) {
  if(!s->phase){s->mode=0;s->pm_status=s->tvoc_status=0x52;}
  else if(s->phase<=3){
   uint32_t duration,elapsed,remaining;
-  sensor_air_warmup(s,now,&duration,&elapsed,&remaining);
-  bool warming=remaining!=0;
+  bool warming=sensor_air_warmup(s,now,&duration,&elapsed,&remaining)&&
+      remaining!=0;
   s->mode=warming?(uint8_t)(4-s->phase):0;
   s->pm_status=0x51;s->tvoc_status=warming?0x56:0x51;
  }else s->pm_status=0x52;
