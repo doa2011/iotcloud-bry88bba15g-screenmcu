@@ -433,7 +433,7 @@ static bool calibration_event(void *context, unsigned channel, unsigned event,
 void screen_runtime_calibration_poll(screen_runtime *s, uint32_t age,
                                      uint16_t co2, uint16_t tvoc) {
   if (!s) return;
-  for (unsigned i=0;i<2;i++) {
+  for (int i=0;i<2;i++) {
     bool fresh = calibration_fresh(s, i);
     bool running = fresh || (i && s->air_owned && s->air.received &&
         s->air.pm_status == 0x51 && !s->module.inhibited && !s->module.duration);
