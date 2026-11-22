@@ -6,7 +6,8 @@ int main(void) {
   screen_power p;
   memset(&p, 0, sizeof(p));
 
-  /* Rear-key short press: provision only after release. */
+  /* PR validation: this contract is host-testable independently of the SWM34S cross toolchain. */
+/* Rear-key short press: provision only after release. */
   assert(power_tick(&p, false, true, true, false) == 0);
   assert(power_tick(&p, false, false, true, false) == POWER_PROVISION);
 
