@@ -95,6 +95,11 @@ target_link_libraries(update_test PRIVATE screen_core m)
 target_compile_options(update_test PRIVATE -UNDEBUG)
 add_test(NAME update COMMAND update_test)
 
+add_executable(power_test tests/power.c)
+target_link_libraries(power_test PRIVATE screen_core m)
+target_compile_options(power_test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
+add_test(NAME power COMMAND power_test)
+
 add_executable(sensor_test tests/sensors.c)
 target_link_libraries(sensor_test PRIVATE screen_core m)
 target_compile_options(sensor_test PRIVATE -UNDEBUG -Wall -Wextra -Werror)
