@@ -35,7 +35,7 @@ jobs:
       - name: Install ARM build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi binutils-arm-none-eabi python3 curl unzip
+          sudo apt-get install -y cmake ninja-build python3 curl unzip xz-utils
       - uses: actions/checkout@v4
         with:
           repository: lvgl/lvgl
@@ -48,6 +48,15 @@ jobs:
           ref: c859b25da02955fef659d658b8f324b5cde87be3
           path: .deps/cjson
           persist-credentials: false
+      - name: Install pinned Arm GNU Toolchain 13.3.Rel1
+        run: |
+          toolchain="$HOME/.cache/phicomm/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi"
+          mkdir -p "$HOME/.cache/phicomm/toolchains"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 600 \
+            https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
+            -o "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          tar -xJf "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz" -C "$HOME/.cache/phicomm/toolchains"
+          test -x "$toolchain/bin/arm-none-eabi-gcc"
       - name: Download official Synwit SWM341 SDK (2025-08-07)
         run: |
           mkdir -p "$RUNNER_TEMP/swm-sdk"
@@ -69,7 +78,6 @@ jobs:
           cmake -S . -B build-arm -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_TOOLCHAIN_FILE=platform/swm34s/arm-none-eabi.cmake \
-            -DARM_GNU_DIR=/usr \
             -DSCREEN_BUILD_FIRMWARE=ON \
             -DSCREEN_BUILD_PREVIEW=OFF \
             -DSWM_SDK_DIR="$SWM_SDK_DIR" \
