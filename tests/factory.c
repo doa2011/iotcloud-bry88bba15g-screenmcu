@@ -189,7 +189,7 @@ int main(void) {
   /* Long rear-key reset is a coordinated request, not a blind MCU-only reset. */
   used = 0;
   assert(factory_reset_request(&f));
-  assert(!strcmp(wire, "factory_reset\\r\\n"));
+  assert(!strcmp(wire, "factory_reset\r\n"));
   const char reset_ok[] = "+factory_reset:OK";
   factory_line(&f, reset_ok, sizeof(reset_ok) - 1);
   assert(factory_reset_acknowledged(&f));
