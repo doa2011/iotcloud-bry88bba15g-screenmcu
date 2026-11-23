@@ -23,5 +23,8 @@ void factory_line(void *, const char *, size_t);
 void factory_tick(factory_owner *, uint32_t);
 void factory_snapshot(factory_owner *, const char *token, bool response);
 void factory_provision(factory_owner *);
+bool factory_reset_request(factory_owner *);
+bool factory_reset_acknowledged(const factory_owner *);
+bool factory_reset_rejected(const factory_owner *);
 void factory_ota(factory_owner *);
 bool factory_calibration(void *, unsigned, unsigned, const uint8_t *, size_t);
