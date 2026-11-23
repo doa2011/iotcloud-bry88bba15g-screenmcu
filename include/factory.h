@@ -11,6 +11,7 @@ typedef struct {
   char mac[13], gateway[13], esp_version[64];
   uint8_t settings[64];
   bool configured, connected, have_mac, dnd;
+  bool reset_ack, reset_rejected;
   unsigned phase;
   uint32_t next, snapshot_at, token, epoch, clock_at;
   int16_t timezone;
