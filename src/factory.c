@@ -350,6 +350,18 @@ static void service(factory_owner *f, const char *topic, const char *text,
 }
 void factory_line(void *ctx, const char *s, size_t n) {
   factory_owner *f = ctx;
+  if (n == sizeof("+factory_reset:OK") - 1 &&
+      !memcmp(s, "+factory_reset:OK", n)) {
+    f->reset_ack = true;
+    f->reset_rejected = false;
+    return;
+  }
+  if (n >= sizeof("+factory_reset:ERROR") - 1 &&
+      !memcmp(s, "+factory_reset:ERROR", sizeof("+factory_reset:ERROR") - 1)) {
+    f->reset_rejected = true;
+    f->reset_ack = false;
+    return;
+  }
   if (n > 9 && n - 9 < sizeof(f->esp_version) && !memcmp(s, "+version:", 9)) {
     memcpy(f->esp_version, s + 9, n - 9);
     f->esp_version[n - 9] = 0;
@@ -395,6 +407,13 @@ void factory_line(void *ctx, const char *s, size_t n) {
   }
 }
 void factory_provision(factory_owner *f) { send(f, "ble_cfg\r\n"); }
+bool factory_reset_request(factory_owner *f) {
+  f->reset_ack = false;
+  f->reset_rejected = false;
+  return send(f, "factory_reset\r\n");
+}
+bool factory_reset_acknowledged(const factory_owner *f) { return f->reset_ack; }
+bool factory_reset_rejected(const factory_owner *f) { return f->reset_rejected; }
 void factory_ota(factory_owner *f) {
   maintenance_query(f->maintenance, f->runtime->now);
 }
