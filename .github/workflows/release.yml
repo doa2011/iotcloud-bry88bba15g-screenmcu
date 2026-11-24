@@ -1,0 +1,122 @@
+name: Publish versioned SWM34S screen MCU release
+
+on:
+  push:
+    branches:
+      - 'release/screen-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish pinned screen MCU release
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install ARM build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3 curl unzip xz-utils
+
+      - uses: actions/checkout@v4
+        with:
+          repository: lvgl/lvgl
+          ref: 74d0a816a440eea53e030c4f1af842a94f7ce3d3
+          path: .deps/lvgl
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: DaveGamble/cJSON
+          ref: c859b25da02955fef659d658b8f324b5cde87be3
+          path: .deps/cjson
+          persist-credentials: false
+
+      - name: Install pinned Arm GNU Toolchain 13.3.Rel1
+        run: |
+          toolchain="$HOME/.cache/phicomm/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi"
+          mkdir -p "$HOME/.cache/phicomm/toolchains"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 600 \
+            https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
+            -o "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          tar -xJf "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz" -C "$HOME/.cache/phicomm/toolchains"
+          test -x "$toolchain/bin/arm-none-eabi-gcc"
+
+      - name: Download official Synwit SWM341 SDK (2025-08-07)
+        run: |
+          mkdir -p "$RUNNER_TEMP/swm-sdk"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 300 \
+            https://www.synwit.cn/uploads/soft/20250807/1-250PG51415321.zip \
+            -o "$RUNNER_TEMP/swm341-lib.zip"
+          unzip -q "$RUNNER_TEMP/swm341-lib.zip" -d "$RUNNER_TEMP/swm-sdk"
+          header="$(find "$RUNNER_TEMP/swm-sdk" -path '*/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h' -print -quit)"
+          test -n "$header"
+          sdk_dir="\${header%/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h}"
+          echo "SWM_SDK_DIR=$sdk_dir" >> "$GITHUB_ENV"
+
+      - name: Verify pinned SDK and dependencies
+        run: |
+          python3 tools/check_sdk.py "$SWM_SDK_DIR"
+          python3 tools/check_dependencies.py "$PWD/.deps/lvgl"
+          python3 tools/check_cjson.py "$PWD/.deps/cjson"
+
+      - name: Configure target firmware
+        run: |
+          cmake -S . -B build-arm -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=platform/swm34s/arm-none-eabi.cmake \
+            -DSCREEN_BUILD_FIRMWARE=ON \
+            -DSCREEN_BUILD_PREVIEW=OFF \
+            -DSWM_SDK_DIR="$SWM_SDK_DIR" \
+            -DLVGL_DIR="$PWD/.deps/lvgl" \
+            -DCJSON_DIR="$PWD/.deps/cjson"
+
+      - name: Compile SWM34S firmware
+        run: cmake --build build-arm --target screen_firmware --parallel 2
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          cp build-arm/screen_firmware.bin release-assets/
+          cp build-arm/manifest.json release-assets/
+          curl --fail --location --retry 5 \
+            https://github.com/phicomm-io/iotcloud-bry88bba15g-screenmcu/releases/download/screen-c59386c429871bc26339c7a6a19cfd5623241814/screen_recovery.bin \
+            -o release-assets/screen_recovery.bin
+          curl --fail --location --retry 5 \
+            https://github.com/phicomm-io/iotcloud-bry88bba15g-screenmcu/releases/download/screen-c59386c429871bc26339c7a6a19cfd5623241814/screen_zh32.iotfnt \
+            -o release-assets/screen_zh32.iotfnt
+          printf '%s  %s\n' \
+            '77c7669b456bbed9b4ccad7f2617bf103d118b58664c36372edb6160a5c50afd' \
+            'release-assets/screen_recovery.bin' \
+            'eb2a44f758a2866d4eb037709d85be32b3b18b077271243715af21aebcb76d1f' \
+            'release-assets/screen_zh32.iotfnt' | sha256sum --check
+          (cd release-assets && sha256sum screen_firmware.bin screen_recovery.bin screen_zh32.iotfnt manifest.json > SHA256SUMS)
+          cat release-assets/manifest.json
+          cat release-assets/SHA256SUMS
+
+      - name: Publish immutable GitHub release
+        env:
+          GH_TOKEN: \${{ github.token }}
+          GH_REPO: \${{ github.repository }}
+        run: |
+          tag="screen-\${GITHUB_SHA}"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --title "Screen MCU $GITHUB_SHA" \
+            --notes "SWM34S screen MCU firmware built from $GITHUB_SHA with pinned Arm GNU 13.3.Rel1 and official Synwit SDK 2025-08-07. Font and recovery bootstrap assets are carried forward unchanged." \
+            release-assets/screen_firmware.bin \
+            release-assets/screen_recovery.bin \
+            release-assets/screen_zh32.iotfnt \
+            release-assets/manifest.json \
+            release-assets/SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screen-mcu-release-assets
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 30
