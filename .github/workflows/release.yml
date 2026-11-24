@@ -55,7 +55,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/swm341-lib.zip" -d "$RUNNER_TEMP/swm-sdk"
           header="$(find "$RUNNER_TEMP/swm-sdk" -path '*/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h' -print -quit)"
           test -n "$header"
-          sdk_dir="\${header%/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h}"
+          sdk_dir="${header%/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h}"
           echo "SWM_SDK_DIR=$sdk_dir" >> "$GITHUB_ENV"
 
       - name: Verify pinned SDK and dependencies
@@ -83,6 +83,17 @@ jobs:
           mkdir -p release-assets
           cp build-arm/screen_firmware.bin release-assets/
           cp build-arm/manifest.json release-assets/
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("release-assets/manifest.json").read_text())
+          if manifest.get("installable") is not True:
+              raise SystemExit(
+                  "Refusing to publish: MCU install gate is not satisfied "
+                  f"(installable={manifest.get('installable')!r}, "
+                  f"gate={manifest.get('install_gate')!r})"
+              )
+          PY
           curl --fail --location --retry 5 \
             https://github.com/phicomm-io/iotcloud-bry88bba15g-screenmcu/releases/download/screen-c59386c429871bc26339c7a6a19cfd5623241814/screen_recovery.bin \
             -o release-assets/screen_recovery.bin
@@ -100,10 +111,10 @@ jobs:
 
       - name: Publish immutable GitHub release
         env:
-          GH_TOKEN: \${{ github.token }}
-          GH_REPO: \${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          tag="screen-\${GITHUB_SHA}"
+          tag="screen-${GITHUB_SHA}"
           gh release create "$tag" \
             --target "$GITHUB_SHA" \
             --title "Screen MCU $GITHUB_SHA" \
