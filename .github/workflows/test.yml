@@ -24,3 +24,83 @@ jobs:
       - run: cmake --build build -j4
       - run: ctest --test-dir build --output-on-failure
       - run: node --test tests/ui_preview_model.mjs
+
+  screen-firmware:
+    name: Build SWM34S screen MCU firmware
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install ARM build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build python3 curl unzip xz-utils
+      - uses: actions/checkout@v4
+        with:
+          repository: lvgl/lvgl
+          ref: 74d0a816a440eea53e030c4f1af842a94f7ce3d3
+          path: .deps/lvgl
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: DaveGamble/cJSON
+          ref: c859b25da02955fef659d658b8f324b5cde87be3
+          path: .deps/cjson
+          persist-credentials: false
+      - name: Install pinned Arm GNU Toolchain 13.3.Rel1
+        run: |
+          toolchain="$HOME/.cache/phicomm/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi"
+          mkdir -p "$HOME/.cache/phicomm/toolchains"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 600 \
+            https://developer.arm.com/-/media/Files/downloads/gnu/13.3.rel1/binrel/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi.tar.xz \
+            -o "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz"
+          tar -xJf "$RUNNER_TEMP/arm-gnu-toolchain.tar.xz" -C "$HOME/.cache/phicomm/toolchains"
+          test -x "$toolchain/bin/arm-none-eabi-gcc"
+      - name: Download official Synwit SWM341 SDK (2025-08-07)
+        run: |
+          mkdir -p "$RUNNER_TEMP/swm-sdk"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 20 --max-time 300 \
+            https://www.synwit.cn/uploads/soft/20250807/1-250PG51415321.zip \
+            -o "$RUNNER_TEMP/swm341-lib.zip"
+          unzip -q "$RUNNER_TEMP/swm341-lib.zip" -d "$RUNNER_TEMP/swm-sdk"
+          header="$(find "$RUNNER_TEMP/swm-sdk" -path '*/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h' -print -quit)"
+          test -n "$header"
+          sdk_dir="${header%/SWM341_StdPeriph_Driver/CSL/CMSIS/DeviceSupport/SWM341.h}"
+          echo "SWM_SDK_DIR=$sdk_dir" >> "$GITHUB_ENV"
+      - name: Verify pinned SDK and dependencies
+        run: |
+          python3 tools/check_sdk.py "$SWM_SDK_DIR"
+          python3 tools/check_dependencies.py "$PWD/.deps/lvgl"
+          python3 tools/check_cjson.py "$PWD/.deps/cjson"
+      - name: Configure target firmware
+        run: |
+          cmake -S . -B build-arm -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE=platform/swm34s/arm-none-eabi.cmake \
+            -DSCREEN_BUILD_FIRMWARE=ON \
+            -DSCREEN_BUILD_PREVIEW=OFF \
+            -DSWM_SDK_DIR="$SWM_SDK_DIR" \
+            -DLVGL_DIR="$PWD/.deps/lvgl" \
+            -DCJSON_DIR="$PWD/.deps/cjson"
+      - name: Compile SWM34S firmware
+        run: cmake --build build-arm --target screen_firmware --parallel 2
+      - name: Verify firmware package
+        run: |
+          test -s build-arm/screen_firmware.bin
+          test -s build-arm/screen_firmware.elf
+          test -s build-arm/screen_firmware.map
+          test -s build-arm/manifest.json
+          test -s build-arm/SHA256SUMS
+          cat build-arm/manifest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screen-mcu-firmware
+          path: |
+            build-arm/screen_firmware.bin
+            build-arm/screen_firmware.elf
+            build-arm/screen_firmware.map
+            build-arm/manifest.json
+            build-arm/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30

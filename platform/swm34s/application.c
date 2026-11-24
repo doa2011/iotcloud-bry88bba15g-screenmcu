@@ -227,6 +227,13 @@ static bool guard_install(void *context) {
   bool ok = maintenance.staged &&
             screen_boot_ack(&boot_control) &&
             screen_boot_commit(&boot_control, &maintenance.update);
+  /* A failed activation must release a temporary recovery hold. Otherwise
+   * startup remains in the recovery loop and never initializes sensors.
+   * Preserve forced fault-recovery holds: only a normal OTA recovery is released. */
+  if (!ok && !guard.forced) {
+    guard.held = false;
+    guard.released = true;
+  }
   /* A lost reply must not leave a running application permanently inhibited. */
   if (normal_ready) screen_module_inhibit(&runtime.module, wallpaper.active || font_bank.active);
   return ok;
@@ -249,7 +256,18 @@ static uint32_t maintenance_clock(void *context) {
 static void sensors_reset(void);
 static void media_board_maintenance_released(void);
 static void maintenance_activity(void *context, bool active) {
-  if (!active) media_board_maintenance_released();
+  if (!active) {
+    media_board_maintenance_released();
+    /* abort_transfer() clears staged/state before invoking this callback.
+     * Release the temporary hold acquired by +screen_recover so the startup
+     * loop can continue into normal sensor initialization. Keep forced
+     * fault-recovery holds intact. A verified staged image keeps its hold
+     * until activation succeeds or guard_install() reports failure. */
+    if (!maintenance.staged && !guard.forced) {
+      guard.held = false;
+      guard.released = true;
+    }
+  }
   (void)context;
   if (normal_ready) {
     if (active) {
