@@ -11,6 +11,7 @@ typedef struct {
   char mac[13], gateway[13], esp_version[64];
   uint8_t settings[64];
   bool configured, connected, have_mac, dnd;
+  bool reset_ack, reset_rejected;
   unsigned phase;
   uint32_t next, snapshot_at, token, epoch, clock_at;
   int16_t timezone;
@@ -23,5 +24,8 @@ void factory_line(void *, const char *, size_t);
 void factory_tick(factory_owner *, uint32_t);
 void factory_snapshot(factory_owner *, const char *token, bool response);
 void factory_provision(factory_owner *);
+bool factory_reset_request(factory_owner *);
+bool factory_reset_acknowledged(const factory_owner *);
+bool factory_reset_rejected(const factory_owner *);
 void factory_ota(factory_owner *);
 bool factory_calibration(void *, unsigned, unsigned, const uint8_t *, size_t);

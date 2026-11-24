@@ -185,6 +185,19 @@ int main(void) {
   assert(ack_bytes);
   screen_runtime_feed(&r, ack, ack_bytes, 45001);
   assert(r.caps.ready && (r.caps.capabilities & SCREEN_CAP_PAGE_POLICY));
-  puts("factory UART snapshot scales, presence, token, atomic settings, "
-       "invalid bounds, HCHO no-op, clock, provision and one offer per link passed");
+
+  /* Long rear-key reset is a coordinated request, not a blind MCU-only reset. */
+  used = 0;
+  assert(factory_reset_request(&f));
+  assert(!strcmp(wire, "factory_reset\r\n"));
+  const char reset_ok[] = "+factory_reset:OK";
+  factory_line(&f, reset_ok, sizeof(reset_ok) - 1);
+  assert(factory_reset_acknowledged(&f));
+  assert(!factory_reset_rejected(&f));
+  const char reset_error[] = "+factory_reset:ERROR<0071>";
+  factory_line(&f, reset_error, sizeof(reset_error) - 1);
+  assert(!factory_reset_acknowledged(&f));
+  assert(factory_reset_rejected(&f));
+
+  puts("factory UART snapshot, provision, coordinated factory reset ACK/error and one offer per link passed");
 }

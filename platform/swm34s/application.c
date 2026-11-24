@@ -652,6 +652,10 @@ static void sensors_tick(uint32_t now) {
     break;
   }
 }
+static bool factory_reset_waiting;
+static uint32_t factory_reset_deadline;
+static uint32_t factory_reset_restart_at;
+
 static void power_tick_board(void) {
   /* Stock PM9 is high on external power; low selects battery operation. */
   runtime.model.charging = GPIO_GetBit(GPIOM, 9) != 0;
@@ -696,10 +700,33 @@ static void power_tick_board(void) {
     screen_event(&runtime.model, page_tap);
   if (event & POWER_PROVISION)
     factory_provision(&factory);
-  if (event & POWER_RESET)
-    recovery_latch(false);
   if (event & POWER_RESET) {
+    recovery_latch(false);
     air_stopped();
+    factory_reset_restart_at = 0;
+    factory_reset_waiting = factory_reset_request(&factory);
+    factory_reset_deadline = board_ms + 3000;
+    if (!factory_reset_waiting)
+      printf("[RESET] unable to send factory_reset to ESP32\\n");
+  }
+  /* Do not reset only the screen MCU. Wait until the ESP32 confirms that it
+   * erased its complete application configuration and Wi-Fi credentials.
+   * The ESP32 schedules its own reboot after sending the acknowledgement. */
+  if (factory_reset_waiting) {
+    if (factory_reset_acknowledged(&factory)) {
+      factory_reset_waiting = false;
+      factory_reset_restart_at = board_ms + 300;
+      printf("[RESET] ESP32 factory reset acknowledged\\n");
+    } else if (factory_reset_rejected(&factory) ||
+               (int32_t)(board_ms - factory_reset_deadline) >= 0) {
+      factory_reset_waiting = false;
+      factory_reset_restart_at = 0;
+      printf("[RESET] ESP32 factory reset failed or timed out; MCU left running\\n");
+    }
+  }
+  if (factory_reset_restart_at &&
+      (int32_t)(board_ms - factory_reset_restart_at) >= 0) {
+    factory_reset_restart_at = 0;
     NVIC_SystemReset();
   }
   if (event & POWER_OFF) {
