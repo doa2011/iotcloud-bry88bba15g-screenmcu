@@ -27,3 +27,8 @@ unsigned battery_trimmed_mv(const uint16_t samples[40], bool pm9_high);
 /* OTA temporarily overrides idle/scheduled darkness without changing settings. */
 unsigned power_backlight_target(unsigned target, unsigned ceiling, bool asleep,
                                 bool ota);
+/* Extended display policy already resolves sleep brightness. Only legacy
+ * power mode forces zero for asleep; OTA remains the highest-priority override. */
+unsigned power_display_backlight_target(unsigned target, unsigned ceiling,
+                                        bool policy_managed, bool asleep,
+                                        bool ota);
