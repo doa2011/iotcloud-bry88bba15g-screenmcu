@@ -79,6 +79,15 @@ int main(void) {
   assert(power_backlight_target(54, 100, true, false) == 0);
   assert(power_backlight_target(54, 100, false, false) == 54);
   assert(power_backlight_target(54, 40, false, false) == 40);
+  /* Extended sleep is a display policy state, not an unconditional PWM-off
+   * command: a configured idle brightness must remain visible. */
+  assert(power_display_backlight_target(18, 100, true, true, false) == 18);
+  assert(power_display_backlight_target(0, 100, true, true, false) == 0);
+  assert(power_display_backlight_target(18, 100, true, false, false) == 18);
+  /* Legacy sleep and OTA override retain their original behavior. */
+  assert(power_display_backlight_target(18, 100, false, true, false) == 0);
+  assert(power_display_backlight_target(18, 100, true, true, true) == 10);
+  assert(power_display_backlight_target(80, 35, true, true, false) == 35);
   s.tx_sequence = UINT32_MAX;
   assert(!screen_runtime_backlight(&s, 60, 10, 10, false));
 
