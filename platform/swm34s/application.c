@@ -751,7 +751,8 @@ static void power_tick_board(void) {
     board_backlight(power_backlight_target(target,ceiling,false,false));
     return;
   }
-  board_backlight(power_backlight_target(target, ceiling, power.asleep, power.ota));
+  board_backlight(power_display_backlight_target(target, ceiling, extended,
+                                                  power.asleep, power.ota));
 }
 static void resource_service(void *c) {
   (void)c; pump(); board_watchdog_feed();

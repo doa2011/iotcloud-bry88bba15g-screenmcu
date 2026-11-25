@@ -5,6 +5,15 @@ unsigned power_backlight_target(unsigned target, unsigned ceiling, bool asleep,
   if (ceiling > 100) ceiling = 100;
   return value < ceiling ? value : ceiling;
 }
+unsigned power_display_backlight_target(unsigned target, unsigned ceiling,
+                                        bool policy_managed, bool asleep,
+                                        bool ota) {
+  /* display_step() has already selected the scheduled/idle target, including
+   * a non-zero idle_brightness. Do not erase that decision by applying the
+   * legacy asleep=>0 rule a second time. */
+  return power_backlight_target(target, ceiling,
+                                policy_managed ? false : asleep, ota);
+}
 bool power_in_dnd(unsigned minute, unsigned start, unsigned end, bool enabled) {
   if (!enabled || minute >= 1440 || start >= 1440 || end >= 1440 ||
       start == end)
