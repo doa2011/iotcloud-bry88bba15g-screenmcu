@@ -508,6 +508,9 @@ static void chart(lv_obj_t *c,const screen_model *m,const scene_item *it,
     label(c,0,legend+k*38,w,38,b,p->axis[2]==2?screen_ui_font(24,false):&zh32,legend_color(k));
   }
 }
+static bool fullscreen_image(const scene_item *it) {
+  return it->type==SC_IMAGE && it->image_fit==2 && !it->x && !it->y && it->w==4 && it->h==6;
+}
 static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item *it,uint32_t now,lv_obj_t *existing) {
   if(existing&&it->type==SC_IMAGE&&stream.width&&stream.height) {
     lv_obj_t *clip=lv_obj_get_child(existing,-1);
@@ -526,12 +529,14 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
   bool clock=it->type==SC_CLOCK;
   bool camera_row=it->type==SC_IMAGE&&it->x==0&&it->w==4;
   bool monitor=camera_row&&it->h==6;
+  bool fullscreen=fullscreen_image(it);
   if(camera_row){x=0;w=SCREEN_WIDTH;}
+  if(fullscreen){y=0;h=SCREEN_HEIGHT;}
   custom=appearance_find(appearance,it->id);
-  lv_obj_t *c=existing?existing:box(root,x,y,w,h,wc(0),12);
+  lv_obj_t *c=existing?existing:box(root,x,y,w,h,fullscreen?0:wc(0),fullscreen?0:12);
   reuse_labels=(clock||it->type==SC_VALUE)?c:NULL;reuse_index=0;
   if(existing&&!reuse_labels)lv_obj_clean(c);
-  unsigned alpha=it->type==SC_IMAGE?0:appearance_opacity(appearance,custom,it->type,it->h,have_wallpaper);
+  unsigned alpha=fullscreen?100:it->type==SC_IMAGE?0:appearance_opacity(appearance,custom,it->type,it->h,have_wallpaper);
   lv_obj_set_style_bg_opa(c,alpha*255/100,0);
   if(have_wallpaper) {lv_obj_set_style_border_width(c,it->type==SC_IMAGE?0:1,0);lv_obj_set_style_border_color(c,lv_color_hex(appearance_color(appearance,AP_LINE)),0);lv_obj_set_style_border_opa(c,alpha*100/100,0);}
   int pad=clock||camera_row?0:12;w-=pad*2;h-=monitor?0:24;
@@ -562,7 +567,7 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
     return c;
   }
   bool full=it->w==4&&it->h==6;
-  const char *title=it->hide_title?"":it->type==SC_WEATHER&&m->weather.location[0]?m->weather.location:it->title;
+  const char *title=(fullscreen||it->hide_title)?"":it->type==SC_WEATHER&&m->weather.location[0]?m->weather.location:it->title;
   bool wide_weather=it->type==SC_WEATHER&&it->w==4&&it->h<=2;
   if(title[0]&&it->type!=SC_VALUE&&!(wide_weather&&it->h==1)&&(!(it->type==SC_LINE||it->type==SC_BAR||it->type==SC_PIE)||it->h>=4)&&
      (!full||strcmp(title,m->scene.page[it->page].title)))label(c,0,0,it->type==SC_WEATHER&&!full&&!wide_weather?w-46:w,40,title,&zh32,wc(1));
@@ -600,9 +605,15 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
     }
     if(!row)label(c,0,64,w,80,"暂无提醒",&zh32,MUTED);
   } else if(it->type==SC_IMAGE) {
-    int top=it->hide_title?0:48;
+    int top=(fullscreen||it->hide_title)?0:48;
     if(stream.width&&stream.height){
       lv_obj_t *image=picture(c,&stream_image_descriptor,stream.pixels,stream.width,stream.height,0,top,w,h-top,it->image_fit!=0);
+      if(image&&fullscreen){
+        unsigned a=((unsigned)w*256+stream.width-1)/stream.width;
+        unsigned b=((unsigned)h*256+stream.height-1)/stream.height;
+        unsigned zoom=a>b?a:b;
+        if(zoom<=65535u)lv_img_set_zoom(image,zoom);
+      }
       if(image&&!it->image_fit){
         lv_point_t pivot;lv_img_get_pivot(image,&pivot);
         /* LVGL aligns the unscaled box; compensate its zoom around the pivot
@@ -612,7 +623,7 @@ static lv_obj_t *component(lv_obj_t *root,const screen_model *m,const scene_item
         lv_obj_align(image,LV_ALIGN_TOP_MID,0,offset);
       }
     }
-    else label(c,0,top,w,h-top,english?"Waiting for camera":"等待摄像头画面",&zh32,MUTED);
+    else label(c,0,top,w,h-top,fullscreen?(english?"Waiting for photo":"等待相册画面"):(english?"Waiting for camera":"等待摄像头画面"),&zh32,MUTED);
   }
   return c;
 }
@@ -836,7 +847,9 @@ bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
   if(rebuild) {
   unsigned total=0;for(unsigned i=0;i<m->scene.pages;i++)total+=m->scene.page[i].enabled;
   unsigned page=m->page<m->scene.pages?m->page:0;
-  unsigned j=0;for(unsigned i=0;i<m->scene.pages;i++)if(m->scene.page[i].enabled) {
+  bool fullscreen=false;
+  for(unsigned i=0;i<m->scene.count;i++)if(m->scene.item[i].page==page&&fullscreen_image(&m->scene.item[i]))fullscreen=true;
+  unsigned j=0;for(unsigned i=0;i<m->scene.pages;i++)if(!fullscreen&&m->scene.page[i].enabled) {
     /* Integer boundaries cover every edge pixel, even with seven pages. The
      * rail overlays the top edge and reserves no row beneath the widgets. */
     int left=SCREEN_WIDTH*j/total,right=SCREEN_WIDTH*(j+1)/total;

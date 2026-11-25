@@ -92,6 +92,29 @@ static void tvoc_countdown(void) {
  model.tvoc_warmup_seconds_remaining=15;
  assert(screen_ui(&model,122000,false));draw();assert(!find(lv_scr_act(),"00:15"));
 }
+static void fullscreen_photo(void) {
+ screen_init(&model);scene(SC_IMAGE,4,6);
+ model.scene.item[0].image_fit=2;
+ assert(scene_validate(&model.scene));
+ model.scene.item[0].h=5;assert(!scene_validate(&model.scene));
+ model.scene.item[0].h=6;
+ media_init(&media);stream_init(&stream);
+ stream.width=480;stream.height=854;
+ for(unsigned i=0;i<480*854;i++)stream.pixels[i]=lv_color_hex(0xe03020).full;
+ stream.pixel_crc=media_crc32(stream.pixels,480*854*2);
+ assert(screen_ui(&model,120000,false));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0xe03020).full);
+ artifact("fullscreen-photo-red");
+ for(unsigned i=0;i<480*854;i++)stream.pixels[i]=lv_color_hex(0x2080e0).full;
+ stream.pixel_crc=media_crc32(stream.pixels,480*854*2);
+ assert(screen_ui(&model,120001,false));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x2080e0).full);
+ artifact("fullscreen-photo-blue");
+ flushed_pixels=0;assert(!screen_ui(&model,120002,false));draw();assert(!flushed_pixels);
+ model.scene.item[0].image_fit=1;
+ assert(screen_ui(&model,120003,false));draw();assert(find(lv_scr_act(),"空气"));
+ stream_init(&stream);
+}
 static void camera_alignment(void) {
  screen_init(&model);scene(SC_IMAGE,4,6);model.scene.item[0].hide_title=1;
  stream_init(&stream);stream.width=320;stream.height=240;stream.revision++;
@@ -479,7 +502,7 @@ int main(void) {
  lv_disp_draw_buf_init(&buffer,pixels,NULL,SCREEN_WIDTH*16);
  lv_disp_drv_init(&display);display.hor_res=SCREEN_WIDTH;display.ver_res=SCREEN_HEIGHT;
  display.draw_buf=&buffer;display.flush_cb=flush;display.draw_ctx_init=screen_draw_ctx_init;lv_disp_drv_register(&display);
- camera_alignment();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
+ fullscreen_photo();camera_alignment();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  compact_layout();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  scene(SC_VALUE,2,2);screen_sample_set(&model,MET_CO2,628,true,120000);
  assert(screen_ui(&model,120000,false));draw();inside(card());
