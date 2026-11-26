@@ -630,6 +630,46 @@ static bool ready(unsigned timeout) {
   }
   return true;
 }
+/* The A1 write/readback has already succeeded. Verify idle again before
+ * handing the existing NOR contents to the stock loader; do not erase or
+ * change the NOR mode, QE or protection bits. */
+bool board_ota_handoff_ready(void) {
+  if (!ready(1000)) return false;
+  if (nor_read_mode != GUARD_NOR_GPIO) {
+    if (!nor_sfc_idle(1000)) return false;
+    SFC->CFG &= ~SFC_CFG_WREN_Msk;
+    __DSB();
+  }
+  /* board_send queues bytes, it does not wait for the final stop bit.
+   * Bound this wait: a missing ACK cannot veto an already committed install. */
+  uint32_t started = board_ms;
+  while (UART_IsTXBusy(UART0) && (uint32_t)(board_ms - started) < 100)
+    board_watchdog_feed();
+  return true;
+}
+__attribute__((noinline,noreturn)) void board_ota_restart(void) {
+  /* Preserve the existing watchdog handoff policy until stock-loader
+   * erase/copy timing has been measured. Tick and IRQs still run here. */
+  board_delay(30);
+  WDT->CR &= ~WDT_CR_EN_Msk;
+  __DSB();
+  /* Stock SV.04.00.04.00 @ 0x17d98: mask IRQs, reset GPIOA/TIMR,
+   * release peripheral reset, then request the Cortex system reset.
+   * Never use a tick-based wait after disabling interrupts or TIMR. */
+  __disable_irq();
+  for (unsigned i = 0; i < 3; ++i) NVIC->ICER[i] = 0xffffffffu;
+  __DSB();
+  SYS->PRSTEN = 0x55;
+  SYS->PRSTR0 = SYS_PRSTR0_GPIOA_Msk | SYS_PRSTR0_TIMR_Msk;
+  __DSB();
+  us(100);
+  SYS->PRSTR0 = 0;
+  SYS->PRSTR1 = 0;
+  SYS->PRSTEN = 0;
+  __DSB();
+  NVIC_SystemReset();
+  for (;;) __NOP();
+}
 static bool nor_quad_enable(void) {
   if(nor_read_mode!=GUARD_NOR_SFC_QUAD||nor_quad_ready)return true;
   if(board_jedec()!=0x684018)return false;

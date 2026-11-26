@@ -11,10 +11,15 @@ static bool slow_flash;
 static bool erase_fail;
 static bool inhibited;
 static unsigned entries, exits;
+static screen_maintenance *observed;
+static bool exited_clear;
 static void activity(void *context, bool active) {
   (void)context;
   inhibited = active;
-  if (active) entries++; else exits++;
+  if (active) entries++; else {
+    exits++;
+    exited_clear = observed && !observed->state && !observed->staged;
+  }
 }
 static uint32_t clock_ms(void *context) { (void)context; return ticks; }
 static bool send(void *c, const char *p, size_t n) {
@@ -66,6 +71,7 @@ static void text(screen_maintenance *m, const char *p) {
 }
 int main(void) {
   screen_maintenance m = {0};
+  observed = &m;
   m.send = send;
   m.line = line;
   m.activity = activity;
@@ -193,6 +199,26 @@ int main(void) {
   assert(m.state==2 && strstr(output,"start_ota 1 20"));
   maintenance_init(&m);
   assert(!m.state && !inhibited);
+  /* Unrelated UART traffic must not postpone OTA timeout. */
+  m.clock = NULL;
+  assert(maintenance_query(&m, 100));
+  text(&m, "unrelated business\r\n");
+  maintenance_tick(&m, 30100);
+  assert(!m.state && !inhibited && exited_clear);
+  /* Lost activation cannot retain a staged startup hold indefinitely. */
+  m.state = 5; m.staged = true;
+  memcpy(m.update.expected, digest, sizeof(digest));
+  m.update.transfer.verified = true;
+  text(&m, ending);
+  assert(!m.state && m.staged && !exited_clear);
+  maintenance_tick(&m, 180099);
+  assert(m.staged);
+  maintenance_tick(&m, 180100);
+  assert(!m.staged && !m.update.transfer.verified && exited_clear);
+  /* UART overflow/reset clears the staging flag before the release callback. */
+  m.state = 5; m.staged = true; m.update.transfer.verified = true;
+  maintenance_init(&m);
+  assert(!m.state && !m.staged && !m.update.transfer.verified && exited_clear);
   puts("factory raw UART OTA replay, second transfer, bad offset and timeout "
        "passed; staging never activates the image");
 }
