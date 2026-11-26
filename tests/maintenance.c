@@ -211,10 +211,13 @@ int main(void) {
   m.update.transfer.verified = true;
   text(&m, ending);
   assert(!m.state && m.staged && !exited_clear);
+  /* The raw owner is released for Guard INSTALL, not for media/NOR work. */
+  assert(maintenance_media_blocked(&m));
   maintenance_tick(&m, 180099);
-  assert(m.staged);
+  assert(m.staged && maintenance_media_blocked(&m));
   maintenance_tick(&m, 180100);
   assert(!m.staged && !m.update.transfer.verified && exited_clear);
+  assert(!maintenance_media_blocked(&m));
   /* UART overflow/reset clears the staging flag before the release callback. */
   m.state = 5; m.staged = true; m.update.transfer.verified = true;
   maintenance_init(&m);

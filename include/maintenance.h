@@ -20,6 +20,11 @@ typedef struct {
   bool discard;
   const char *version;
 } screen_maintenance;
+/* Raw UART ownership ends at state==0, but a verified image still owns the
+ * media/NOR maintenance window until activation, cancellation or expiry. */
+static inline bool maintenance_media_blocked(const screen_maintenance *m) {
+  return m->state != 0 || m->staged;
+}
 void maintenance_init(screen_maintenance *);
 bool maintenance_query(screen_maintenance *, uint32_t);
 void maintenance_feed(screen_maintenance *, uint8_t, uint32_t);

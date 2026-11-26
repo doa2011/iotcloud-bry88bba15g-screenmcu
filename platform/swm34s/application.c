@@ -72,7 +72,8 @@ static uint32_t sensor_step IRAM;
 enum { STAGE_EARLY = 1, STAGE_WINDOW, STAGE_SDRAM, STAGE_BSS,
        STAGE_FACTORY, STAGE_RTC, STAGE_SENSORS, STAGE_LVGL, STAGE_PANEL,
        STAGE_NORMAL, STAGE_RTC_TICK, STAGE_SENSOR_TICK, STAGE_POWER,
-       STAGE_RENDER };
+       STAGE_RENDER, STAGE_OTA_CHECK, STAGE_OTA_COMMITTED,
+       STAGE_OTA_QUIESCE, STAGE_OTA_RESET };
 static void stage(uint32_t value) { fault_record[0] = value; __DSB(); }
 static void recovery_latch(bool held) {
   fault_latch_check = held ? ~0x52454356u : 0;
@@ -225,10 +226,12 @@ static bool guard_install(void *context) {
   if (normal_ready) screen_module_inhibit(&runtime.module, true);
   /* Installation may be requested while the diagnostic startup is held,
    * before the normal path acknowledges the preceding factory copy. */
+  stage(STAGE_OTA_CHECK);
   bool ok = maintenance.staged &&
             screen_boot_ack(&boot_control) &&
             screen_boot_commit(&boot_control, &maintenance.update);
   ota_boot_committed = ok;
+  if (ok) stage(STAGE_OTA_COMMITTED);
   /* A failed activation must release a temporary recovery hold. Otherwise
    * startup remains in the recovery loop and never initializes sensors.
    * Preserve forced fault-recovery holds: only a normal OTA recovery is released. */
@@ -237,7 +240,7 @@ static bool guard_install(void *context) {
     guard.released = true;
   }
   /* A lost reply must not leave a running application permanently inhibited. */
-  if (normal_ready) screen_module_inhibit(&runtime.module, wallpaper.active || font_bank.active);
+  if (normal_ready) screen_module_inhibit(&runtime.module, ok || wallpaper.active || font_bank.active);
   return ok;
 }
 static void guard_restart(void *context) {
@@ -251,6 +254,7 @@ static void guard_restart(void *context) {
                  sizeof("screen_ota_error reset_handoff_busy\r\n") - 1);
       return;
     }
+    stage(STAGE_OTA_QUIESCE);
     board_lvgl_tick_stop();
     if (panel_ready) {
       LCD_Stop(LCD);
@@ -263,6 +267,7 @@ static void guard_restart(void *context) {
       SYS->CLKEN0 &= ~SYS_CLKEN0_DMA2D_Msk;
       board_jpeg_idle();
     }
+    stage(STAGE_OTA_RESET);
     board_ota_restart();
   }
   board_delay(30);
@@ -297,13 +302,14 @@ static void maintenance_activity(void *context, bool active) {
       screen_runtime_calibration_cancel(&runtime);
       runtime.calibration_valid_since[1] = 0;
     }
-    power.ota = runtime.model.ota = active;
-    runtime.model.asleep = active ? false : power.asleep;
+    const bool busy = active || maintenance_media_blocked(&maintenance);
+    power.ota = runtime.model.ota = busy;
+    runtime.model.asleep = busy ? false : power.asleep;
     /* Apply before the first bounded NOR erase can block the normal tick. */
     if (active) board_backlight(power_backlight_target(0,
         runtime.display.configured ? runtime.display.policy.ceiling : 100,
         false, true));
-    screen_module_inhibit(&runtime.module, active || wallpaper.active || font_bank.active);
+    screen_module_inhibit(&runtime.module, busy || wallpaper.active || font_bank.active);
     if (active) air_stopped();
     sensors_reset();
     screen_runtime_module_report(&runtime);
@@ -313,7 +319,7 @@ static void maintenance_activity(void *context, bool active) {
 static void wallpaper_activity(void *context,bool active) {
   (void)context;
   if(normal_ready){
-    screen_module_inhibit(&runtime.module,active || maintenance.state || wallpaper.active || font_bank.active);
+    screen_module_inhibit(&runtime.module,active || maintenance_media_blocked(&maintenance) || wallpaper.active || font_bank.active);
     if(active)air_stopped();
   }
 }
@@ -689,7 +695,7 @@ static void power_tick_board(void) {
       power_in_dnd(runtime.model.hour * 60 + runtime.model.minute,
                    start / 100 * 60 + start % 100, end / 100 * 60 + end % 100,
                    (factory.settings[14] | factory.settings[15] << 8) != 0);
-  power.ota = maintenance.state != 0;
+  power.ota = maintenance_media_blocked(&maintenance);
   runtime.model.ota = power.ota;
   bool extended = runtime.display.configured && runtime.caps.ready &&
                   (runtime.caps.capabilities & SCREEN_CAP_DISPLAY);
@@ -790,7 +796,7 @@ void screen_start(void) {
                        fault_latch_check == ~0x52454356u;
   uint32_t old_stage = fault_record[0];
   if ((latched_fault || (SYS->RSTSR & SYS_RSTSR_WDT_Msk)) &&
-      old_stage >= STAGE_EARLY && old_stage <= STAGE_RENDER)
+      old_stage >= STAGE_EARLY && old_stage <= STAGE_OTA_RESET)
     for (unsigned i = 0; i < 11; i++)
       previous_fault[i] = fault_record[i];
   for (unsigned i = 0; i < 11; i++)
@@ -957,7 +963,7 @@ void screen_start(void) {
     uint32_t now = board_ms;
     screen_runtime_tick(&runtime, now);
     if (runtime.air_owned && !board_module_read(NULL)) air_stopped();
-    bool media_busy=maintenance.state||wallpaper.active||font_bank.active;
+    bool media_busy=maintenance_media_blocked(&maintenance)||wallpaper.active||font_bank.active;
     media_tick(&media,now,power.asleep||
       (runtime.display.configured?runtime.display.target==0:power.brightness==0),media_busy);
     /* No page switch or flash write: the album is a volatile page-six layer. */
@@ -974,7 +980,7 @@ void screen_start(void) {
     media_source_poll(&media_source,&media,&stream,now,stream_visible,
       board_backlight_percent()&&!runtime.model.asleep&&!media_busy,media_link_state.ready);
     control_check();
-    if (!maintenance.state) {
+    if (!maintenance_media_blocked(&maintenance)) {
       font_bank_poll(&font_bank);
       if(!font_bank.active&&!wallpaper.active){resources_start(&screen_font_resources);resources_poll(&screen_font_resources);}
       wallpaper_poll(&wallpaper);

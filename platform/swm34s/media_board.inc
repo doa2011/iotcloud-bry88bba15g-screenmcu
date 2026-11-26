@@ -36,7 +36,7 @@ static struct {
 } media_socket_tx;
 static bool media_board_socket(void *ctx, const uint8_t *p, size_t n) {
   (void)ctx;
-  if (!media_link_state.ready || maintenance.state || n > sizeof(media_socket_tx.bytes) ||
+  if (!media_link_state.ready || maintenance_media_blocked(&maintenance) || n > sizeof(media_socket_tx.bytes) ||
       (media_socket_tx.size && p[0] != MEDIA_NET_CLOSE))
     return false;
   memcpy(media_socket_tx.bytes, p, n);
@@ -112,6 +112,14 @@ static void media_board_packet(void *ctx, unsigned channel, uint32_t session,
   if (!normal_ready || !media_link_state.ready || maintenance.state)
     return;
   if (channel == MEDIA_COMMAND) {
+    /* Do not consume a command sequence or touch a JPEG while a verified
+     * OTA image awaits activation. A retry after expiry can still succeed. */
+    if (maintenance_media_blocked(&maintenance)) {
+      uint8_t reply[MEDIA_PACKET_MAX] = {p[0], MEDIA_BUSY};
+      size_t bytes = 2 + media_board_status(reply + 2, sizeof(reply) - 2);
+      media_board_send(MEDIA_REPLY, sequence, reply, bytes);
+      return;
+    }
     unsigned result = MEDIA_RANGE;
     uint32_t signature = media_crc32(p, n);
     if (sequence == media_link_state.command &&
@@ -136,6 +144,8 @@ static void media_board_packet(void *ctx, unsigned channel, uint32_t session,
     uint8_t reply[MEDIA_PACKET_MAX] = {p[0], result};
     size_t bytes = 2 + media_board_status(reply + 2, sizeof(reply) - 2);
     media_board_send(MEDIA_REPLY, sequence, reply, bytes);
+  } else if (maintenance_media_blocked(&maintenance)) {
+    return;
   } else if (channel == MEDIA_SOCKET_ACK) {
     if (n == 5 && sequence == media_socket_tx.sequence && media_socket_tx.size >= 5 &&
         !memcmp(p, media_socket_tx.bytes, 5))
@@ -156,7 +166,7 @@ static void media_board_link_poll(void) {
   uint32_t now = board_ms;
   // Raw OTA suspends media heartbeats and can run longer than their timeout.
   // Keep its negotiated UART rate until the maintenance owner releases it.
-  if (maintenance.state) {
+  if (maintenance_media_blocked(&maintenance)) {
     media_link_state.last_ping = now;
     return;
   }
@@ -191,7 +201,7 @@ static void media_board_link_poll(void) {
 
 static void media_board_socket_poll(void) {
   if (!normal_ready) return;
-  if (!media_link_state.ready || maintenance.state) { media_socket_tx.size = 0; return; }
+  if (!media_link_state.ready || maintenance_media_blocked(&maintenance)) { media_socket_tx.size = 0; return; }
   if (media_socket_tx.size && (!media_socket_tx.sent ||
       (uint32_t)(board_ms - media_socket_tx.sent) > 1500)) {
     if (media_socket_tx.attempts >= 3) {
