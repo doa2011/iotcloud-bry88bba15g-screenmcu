@@ -132,9 +132,22 @@ static void native_album_page(void) {
  for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x9040c0).full);
  model.page=0;assert(screen_ui(&model,120002,false));draw();
  assert(find(lv_scr_act(),"空气"));
- model.page=5;assert(screen_ui(&model,120003,false));draw();
+ // Re-enter from another page while the idle policy has dimmed the LCD.
+ model.page=5;model.asleep=true;
+ assert(!screen_ui_lit(&model,120003,false,false));draw();
+ assert(find(lv_scr_act(),"空气")); // 0% backlight: retain existing sleep gate
+ assert(screen_ui_lit(&model,120004,false,true));draw();
  for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x9040c0).full);
- media.album_id=0;assert(screen_ui(&model,120004,false));draw();
+ // Next picture must redraw even while the display remains dimmed.
+ media.album_id=13;media.decoded_id=13;
+ for(unsigned i=0;i<480*854;i++)media.pixels[i]=lv_color_hex(0xe03020).full;
+ media.pixel_crc=media_crc32(media.pixels,480*854*2);
+ assert(screen_ui_lit(&model,120005,false,true));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0xe03020).full);
+ artifact("native-album-dimmed");
+ flushed_pixels=0;assert(!screen_ui_lit(&model,120006,false,true));draw();assert(!flushed_pixels);
+ media.album_id=0;assert(screen_ui_lit(&model,120007,false,true));draw();
+ assert(model.asleep);model.asleep=false;
  media_init(&media);
 }
 static void camera_alignment(void) {

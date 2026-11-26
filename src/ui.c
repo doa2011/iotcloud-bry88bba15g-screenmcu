@@ -776,7 +776,7 @@ static bool native_album_visible(const screen_model *m) {
   return m->page==5 && media.album_id && media.decoded_id==media.album_id &&
          !media_current(&media) && !media.suspended && !m->ota;
 }
-bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
+bool screen_ui_lit(const screen_model *m,uint32_t now,bool demo,bool backlight_lit) {
   english=m->appearance.language==1;
   (void)demo;static uint64_t previous;static bool have;
   static struct {lv_obj_t *card;uint64_t content;} visible[8];
@@ -786,7 +786,11 @@ bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
   static lv_obj_t *album_layer,*album_image;
   static uint32_t album_crc;
   lv_obj_t *root=lv_scr_act();
-  if(m->asleep&&!m->ota)return false;
+  /* A dimmed screen is still visible. Keep native album frames and removal
+   * of a previously rendered album layer current without waking the screen,
+   * changing its brightness, or resuming other sleeping UI updates. */
+  if(m->asleep&&!m->ota && !(backlight_lit && m->page==5 &&
+       (native_album_visible(m)||album_layer)))return false;
   uint64_t hash=structure_hash(m);
   bool rebuild=!have||hash!=previous||!lv_obj_get_child_cnt(root),changed=rebuild;
   if(rebuild){previous=hash;have=true;lv_obj_clean(root);memset(visible,0,sizeof(visible));album_layer=album_image=NULL;}
@@ -881,4 +885,8 @@ bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
   }
   changed=notification_ui(root,m,rebuild)||changed;
   return changed;
+}
+
+bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
+  return screen_ui_lit(m,now,demo,false);
 }

@@ -54,6 +54,8 @@ const char *screen_tvoc_text(unsigned level);
 /* True when visible content changed. Stable value/clock labels are updated
  * in place; page/style/layout changes rebuild only the active page. */
 bool screen_ui(const screen_model *, uint32_t, bool demo);
+/* In dimmed (nonzero backlight) sleep, keep page-six album pixels current. */
+bool screen_ui_lit(const screen_model *, uint32_t, bool demo, bool backlight_lit);
 bool sensor_uart_value(const uint8_t *, unsigned, uint8_t, uint16_t *);
 bool sensor_sht3x(const uint8_t[6], float *, float *);
 unsigned battery_permille(unsigned millivolts);

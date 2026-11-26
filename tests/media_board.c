@@ -2,13 +2,14 @@
 #include "media_wire.h"
 #include "stream.h"
 #include "media_source.h"
+#include "maintenance.h"
 #include <assert.h>
 #include <string.h>
 #define IRAM
 static bool normal_ready;
 static uint32_t board_ms, guard_announce_at;
 static struct { uint32_t session; } guard;
-static struct { unsigned state, used; } maintenance;
+static screen_maintenance maintenance;
 static unsigned baud_changes;
 static bool board_send(void *ctx, const char *p, size_t n) {
   (void)ctx; (void)p; return n != 0;
@@ -63,6 +64,12 @@ int main(void) {
   media_init(&media);stream_init(&stream);media_source_init(&media_source);
   uint8_t push[535]={MEDIA_PUSH_URL};media_put32(push+1,90);media_put32(push+9,1000);push[13]=1;push[14]=30;
   memcpy(push+16,media_source.page,519);push[22]=3;strcpy((char *)push+23,"http://camera.test/event");
+  // Verified staging blocks media without consuming a command sequence.
+  maintenance.staged=true;
+  media_board_packet(NULL,MEDIA_COMMAND,guard.session,10,push,sizeof(push));
+  assert(media_count(&media)==0 && media_link_state.command==0);
+  assert(!media_board_socket(NULL,push,5));
+  maintenance.staged=false;
   media_board_packet(NULL,MEDIA_COMMAND,guard.session,10,push,sizeof(push));
   assert(media_count(&media)==1&&media.last_push_id==90);media.queue[0].remaining=200;
   media_board_packet(NULL,MEDIA_COMMAND,guard.session,10,push,sizeof(push));assert(media.queue[0].remaining==200);

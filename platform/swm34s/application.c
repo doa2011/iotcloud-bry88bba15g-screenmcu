@@ -1071,7 +1071,7 @@ void screen_start(void) {
       if(rendered_font_state!=screen_font_resources.state||rendered_font_crc!=screen_font_resources.crc)screen_ui_font_invalidate();
       rendered_font_state=screen_font_resources.state;rendered_font_crc=screen_font_resources.crc;
       stage(STAGE_RENDER);
-      screen_ui(&runtime.model, now, false);
+      screen_ui_lit(&runtime.model, now, false, board_backlight_percent()!=0 && !maintenance_media_blocked(&maintenance));
     }
     screen_startup_ui(&runtime.model,board_ms);
     lv_timer_handler();
