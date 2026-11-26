@@ -23,6 +23,7 @@ typedef struct {
   unsigned history_next;
   uint32_t active, revision, decoded, decode_errors, pixel_crc, now, last_tick;
   uint32_t last_push_id, source_error;
+  uint32_t album_id, decoded_id;
   uint16_t width, height;
   bool presented, suspended, parked, source_ready;
   bool tap_pending, tap_page;
@@ -47,5 +48,7 @@ unsigned media_select(screen_media *, unsigned index);
 unsigned media_button(screen_media *, uint32_t now, bool down, bool released,
                       bool page_tap, bool blocked);
 void media_present(screen_media *);
+/* Restore the pinned album after a notification used the common RGB arena. */
+bool media_album_restore(screen_media *);
 void media_source_failed(screen_media *, unsigned error);
 size_t media_status(const screen_media *, uint8_t *, size_t);

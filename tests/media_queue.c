@@ -28,7 +28,16 @@ int main(void) {
     assert(media_command(&m,cmd,bytes+9)==MEDIA_OK);assert(media_command(&m,cmd,bytes+9)==MEDIA_OK);
     cmd[9]^=1;assert(media_command(&m,cmd,bytes+9)==MEDIA_RANGE);cmd[9]^=1;at+=bytes;}
   m.images[0].bytes[5]^=1;cmd[0]=MEDIA_COMMIT;assert(media_command(&m,cmd,5)==MEDIA_CRC);m.images[0].bytes[5]^=1;
-  assert(media_command(&m,cmd,5)==MEDIA_OK);assert(push(1,false,false,55)==MEDIA_OK);
+  assert(media_command(&m,cmd,5)==MEDIA_OK);
+  cmd[0]=MEDIA_ALBUM_SET;assert(media_command(&m,cmd,5)==MEDIA_RANGE);
+  assert(!m.album_id);
+  /* Pinning and conditional clear are separate from notification lifetime. */
+  m.album_id=55;
+  cmd[0]=MEDIA_CANCEL;assert(media_command(&m,cmd,5)==MEDIA_BUSY);
+  cmd[0]=MEDIA_ALBUM_CLEAR;media_put32(cmd+1,56);
+  assert(media_command(&m,cmd,5)==MEDIA_NOT_FOUND&&m.album_id==55);
+  media_put32(cmd+1,55);assert(media_command(&m,cmd,5)==MEDIA_OK&&!m.album_id);
+  assert(push(1,false,false,55)==MEDIA_OK);
   assert(push(1,false,false,55)==MEDIA_OK);assert(push(1,true,false,55)==MEDIA_RANGE);
   media_tick(&m,1,true,false);assert(!m.active);media_tick(&m,100,false,false);assert(m.active==1&&calls==1&&!m.presented);
   media_tick(&m,5000,false,false);assert(media_current(&m)->remaining==1000);media_present(&m);

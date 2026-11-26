@@ -12,6 +12,7 @@ static media_image *image(screen_media *m, uint32_t id) {
   return NULL;
 }
 static bool referenced(const screen_media *m, uint32_t id) {
+  if (id && m->album_id == id) return true;
   for (unsigned i = 0; i < MEDIA_QUEUE; i++)
     if (m->queue[i].id && m->queue[i].image == id)
       return true;
@@ -76,6 +77,7 @@ static void finish(screen_media *m, media_notice *q, unsigned state) {
 /* Decode only when selecting or replacing an uploaded image. The foreground
  * owner serializes this buffer with LVGL; LCD scanout uses separate frames. */
 static bool decode_image(screen_media *m, uint32_t id) {
+  m->decoded_id = 0;
   media_image *im = image(m, id);
   media_jpeg j;
   if (!im || !media_jpeg_parse(&j, im->bytes, im->size) || !m->decode ||
@@ -89,8 +91,16 @@ static bool decode_image(screen_media *m, uint32_t id) {
     memmove(m->pixels + row * j.width, m->pixels + row * stride, j.width * 2u);
   m->width = j.width;
   m->height = j.height;
+  m->decoded_id = id;
   m->decoded++;
   m->pixel_crc = media_crc32(m->pixels, j.width * j.height * 2u);
+  return true;
+}
+bool media_album_restore(screen_media *m) {
+  if (!m->album_id || m->active || m->suspended) return false;
+  if (m->decoded_id == m->album_id) return true;
+  if (!decode_image(m, m->album_id)) return false;
+  m->revision++;
   return true;
 }
 static unsigned update_notice(screen_media *m, const uint8_t *p, size_t n) {
@@ -208,6 +218,7 @@ unsigned media_select(screen_media *m, unsigned index) {
   m->source_ready = false;
   m->source_error = 0;
   m->width = m->height = 0;
+  m->decoded_id = 0;
   if (q->image && !decode_image(m, q->image)) {
     finish(m, q, PUSH_FAILED);
     return MEDIA_DECODE;
@@ -295,6 +306,29 @@ unsigned media_command(screen_media *m, const uint8_t *p, size_t n) {
   uint32_t id = media_u32(p + 1);
   media_image *im = image(m, id);
   switch (p[0]) {
+  case MEDIA_ALBUM_SET: {
+    if (n != 5) return MEDIA_RANGE;
+    if (m->active) return MEDIA_BUSY;
+    if (!im || im->state != 2) return MEDIA_NOT_FOUND;
+    /* Native album frames are exact screen size. No scaled intermediate. */
+    if (im->width != MEDIA_WIDTH_MAX || im->height != MEDIA_HEIGHT_MAX) return MEDIA_RANGE;
+    if (m->album_id == id && m->decoded_id == id) return MEDIA_OK;
+    if (!decode_image(m, id)) {
+      /* LCD scans its own completed frame; restore the prior RGB arena before
+       * the next LVGL draw. Never publish a failed JPEG as current. */
+      if (m->album_id) media_album_restore(m);
+      return MEDIA_DECODE;
+    }
+    m->album_id = id;
+    m->revision++;
+    return MEDIA_OK;
+  }
+  case MEDIA_ALBUM_CLEAR:
+    if (n != 5) return MEDIA_RANGE;
+    if (m->album_id && m->album_id != id) return MEDIA_NOT_FOUND;
+    m->album_id = 0;
+    m->revision++;
+    return MEDIA_OK;
   case MEDIA_PUSH_UPDATE:
     return update_notice(m, p, n);
   case MEDIA_BEGIN: {
@@ -564,7 +598,7 @@ size_t media_status(const screen_media *m, uint8_t *p, size_t cap) {
   p[28] = MEDIA_QUEUE;
   p[29] = MEDIA_IMAGE_SLOTS;
   p[30] = MEDIA_STACK;
-  p[31] = 4;
+  p[31] = 5; /* Native album commands; status length remains compatible. */
   media_put32(p + 32, m->last_push_id);
   media_put32(p + 36, m->source_error);
   const media_notice *active = media_current(m);

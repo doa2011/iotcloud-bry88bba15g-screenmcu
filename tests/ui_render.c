@@ -115,6 +115,28 @@ static void fullscreen_photo(void) {
  assert(screen_ui(&model,120003,false));draw();assert(find(lv_scr_act(),"空气"));
  stream_init(&stream);
 }
+static void native_album_page(void) {
+ screen_init(&model);scene(SC_VALUE,2,2);
+ model.scene.pages=6;model.scene.page[5].enabled=true;model.page=5;
+ media_init(&media);media.album_id=11;media.decoded_id=11;
+ media.width=480;media.height=854;
+ for(unsigned i=0;i<480*854;i++)media.pixels[i]=lv_color_hex(0x12a060).full;
+ media.pixel_crc=media_crc32(media.pixels,480*854*2);
+ assert(screen_ui(&model,120000,false));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x12a060).full);
+ artifact("native-album-green");
+ media.album_id=12;media.decoded_id=12;
+ for(unsigned i=0;i<480*854;i++)media.pixels[i]=lv_color_hex(0x9040c0).full;
+ media.pixel_crc=media_crc32(media.pixels,480*854*2);
+ assert(screen_ui(&model,120001,false));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x9040c0).full);
+ model.page=0;assert(screen_ui(&model,120002,false));draw();
+ assert(find(lv_scr_act(),"空气"));
+ model.page=5;assert(screen_ui(&model,120003,false));draw();
+ for(unsigned i=0;i<480*854;i++)assert(frame[i]==lv_color_hex(0x9040c0).full);
+ media.album_id=0;assert(screen_ui(&model,120004,false));draw();
+ media_init(&media);
+}
 static void camera_alignment(void) {
  screen_init(&model);scene(SC_IMAGE,4,6);model.scene.item[0].hide_title=1;
  stream_init(&stream);stream.width=320;stream.height=240;stream.revision++;
@@ -502,7 +524,7 @@ int main(void) {
  lv_disp_draw_buf_init(&buffer,pixels,NULL,SCREEN_WIDTH*16);
  lv_disp_drv_init(&display);display.hor_res=SCREEN_WIDTH;display.ver_res=SCREEN_HEIGHT;
  display.draw_buf=&buffer;display.flush_cb=flush;display.draw_ctx_init=screen_draw_ctx_init;lv_disp_drv_register(&display);
- fullscreen_photo();camera_alignment();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
+ fullscreen_photo();native_album_page();camera_alignment();tvoc_countdown();screen_init(&model);status_icons();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  compact_layout();screen_init(&model);model.battery_valid=true;model.battery_percent=78;
  scene(SC_VALUE,2,2);screen_sample_set(&model,MET_CO2,628,true,120000);
  assert(screen_ui(&model,120000,false));draw();inside(card());

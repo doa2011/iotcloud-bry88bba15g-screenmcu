@@ -936,9 +936,16 @@ void screen_start(void) {
     bool media_busy=maintenance.state||wallpaper.active||font_bank.active;
     media_tick(&media,now,power.asleep||
       (runtime.display.configured?runtime.display.target==0:power.brightness==0),media_busy);
+    /* No page switch or flash write: the album is a volatile page-six layer. */
+    static uint32_t album_restore_at;
+    if (runtime.model.page==5 && media.album_id && media.decoded_id!=media.album_id &&
+        !media.active && !media_busy && (int32_t)(now-album_restore_at)>=0) {
+      media_album_restore(&media);album_restore_at=now+1000;
+    }
     bool stream_visible=false;
     for(unsigned i=0;i<runtime.model.scene.count;i++)
       if(runtime.model.scene.item[i].page==runtime.model.page&&runtime.model.scene.item[i].type==SC_IMAGE)stream_visible=true;
+    if (runtime.model.page==5 && media.album_id) stream_visible=false;
     media_board_socket_poll();
     media_source_poll(&media_source,&media,&stream,now,stream_visible,
       board_backlight_percent()&&!runtime.model.asleep&&!media_busy,media_link_state.ready);

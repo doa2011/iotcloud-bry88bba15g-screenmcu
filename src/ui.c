@@ -22,7 +22,7 @@ static const screen_appearance *appearance;
 static const appearance_item *custom;
 static bool have_wallpaper;
 static lv_obj_t *box(lv_obj_t *,int,int,int,int,unsigned,int);
-static lv_img_dsc_t media_image_descriptor,stream_image_descriptor;
+static lv_img_dsc_t media_image_descriptor,stream_image_descriptor,album_image_descriptor;
 static void picture_cover(lv_event_t *event) {
   lv_cover_check_info_t *info=lv_event_get_param(event);
   if(info->res==LV_COVER_RES_MASKED)return;
@@ -771,6 +771,11 @@ static bool notification_ui(lv_obj_t *root,const screen_model *m,bool reset) {
   n.crc=crc;
   return changed;
 }
+/* Album is not a notification or a persistent layout mutation. */
+static bool native_album_visible(const screen_model *m) {
+  return m->page==5 && media.album_id && media.decoded_id==media.album_id &&
+         !media_current(&media) && !media.suspended && !m->ota;
+}
 bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
   english=m->appearance.language==1;
   (void)demo;static uint64_t previous;static bool have;
@@ -778,11 +783,13 @@ bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
   static lv_obj_t *network,*battery_fill,*charging;
   static bool network_on,battery_valid,battery_charging;
   static unsigned battery_percent;
+  static lv_obj_t *album_layer,*album_image;
+  static uint32_t album_crc;
   lv_obj_t *root=lv_scr_act();
   if(m->asleep&&!m->ota)return false;
   uint64_t hash=structure_hash(m);
   bool rebuild=!have||hash!=previous||!lv_obj_get_child_cnt(root),changed=rebuild;
-  if(rebuild){previous=hash;have=true;lv_obj_clean(root);memset(visible,0,sizeof(visible));}
+  if(rebuild){previous=hash;have=true;lv_obj_clean(root);memset(visible,0,sizeof(visible));album_layer=album_image=NULL;}
   appearance=&m->appearance;custom=NULL;
   BG=appearance_color(appearance,AP_CANVAS);CARD=appearance_color(appearance,AP_BACKGROUND);
   INK=appearance_color(appearance,AP_VALUE);MUTED=appearance_color(appearance,AP_UNIT);GRID=appearance_color(appearance,AP_LINE);
@@ -859,6 +866,18 @@ bool screen_ui(const screen_model *m,uint32_t now,bool demo) {
     lv_obj_set_style_bg_opa(segment,(active?UI_PAGE_RAIL_ACTIVE_OPACITY:UI_PAGE_RAIL_IDLE_OPACITY)*255/100,0);
   }
   if(m->ota){lv_obj_t *o=box(root,32,300,416,160,CARD,20);label(o,16,24,384,110,"正在更新\n请保持供电",&zh32,colors[0]);}
+  }
+  if (native_album_visible(m)) {
+    if (!album_layer) {
+      album_layer=box(root,0,0,480,854,0,0);
+      album_image=picture(album_layer,&album_image_descriptor,media.pixels,480,854,0,0,480,854,false);
+      album_crc=media.pixel_crc;changed=true;
+    } else if (album_crc!=media.pixel_crc) {
+      album_crc=media.pixel_crc;lv_img_cache_invalidate_src(&album_image_descriptor);
+      lv_obj_invalidate(album_image);changed=true;
+    }
+  } else if (album_layer) {
+    lv_obj_del(album_layer);album_layer=album_image=NULL;changed=true;
   }
   changed=notification_ui(root,m,rebuild)||changed;
   return changed;
