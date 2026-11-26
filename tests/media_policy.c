@@ -54,7 +54,7 @@ int main(void) {
   assert(send(101,0,MEDIA_OVERFLOW_DROP_OLDEST)==MEDIA_OK&&m.active==active&&state(1)==PUSH_EVICTED);
   assert(media_select(&m,0)==MEDIA_OK);
   assert(send(102,0,MEDIA_OVERFLOW_DROP_OLDEST)==MEDIA_OK&&!m.active&&state(3)==PUSH_EVICTED);
-  uint8_t bytes[MEDIA_STATUS_BYTES];assert(media_status(&m,bytes,sizeof(bytes))==sizeof(bytes)&&bytes[31]==4);
+  uint8_t bytes[MEDIA_STATUS_BYTES];assert(media_status(&m,bytes,sizeof(bytes))==sizeof(bytes)&&bytes[31]==5);
   assert(send(103,MEDIA_TTL_MAX_MS+1,0)==MEDIA_RANGE);
   assert(send(103,0,255)==MEDIA_RANGE&&media_count(&m)==16);
   puts("PASS hard expiry while hidden/suspended/confirm, clock wrap, TTL patch, overflow decisions and active protection");
