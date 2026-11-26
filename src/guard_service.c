@@ -105,11 +105,11 @@ bool guard_receive(screen_guard *g, const char *line, size_t size, bool ota) {
   }
   char wire[440];
   size_t used = screen_link_encode(wire, sizeof(wire), g->session, sequence, reply, bytes);
-  if (used && g->send && g->send(g->context, wire, used)) {
-    if (reset)
-      g->reset(g->context);
-    if (install)
-      g->restart(g->context);
-  }
+  bool sent = used && g->send && g->send(g->context, wire, used);
+  if (reset && sent) g->reset(g->context);
+  /* A successful INSTALL has already durably committed the verified boot
+   * record. A lost UART reply cannot roll it back; finish the reboot.
+   * Ordinary RESET/RESTART retain their acknowledged semantics. */
+  if (install && (sent || p[1] == GUARD_INSTALL)) g->restart(g->context);
   return true;
 }

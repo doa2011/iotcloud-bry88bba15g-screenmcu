@@ -10,31 +10,35 @@ static void rearm(screen_maintenance *m, uint32_t fallback) {
 }
 static void abort_transfer(screen_maintenance *m) {
   bool active = m->state != 0;
+  bool staged = m->staged;
   screen_update_abort(&m->update);
   m->receiving = false;
   m->staged = false;
   m->state = 0;
   m->block_at = m->block_size = m->prefix_at = 0;
   m->used = 0;
-  if (active && m->activity) m->activity(m->context, false);
+  if ((active || staged) && m->activity) m->activity(m->context, false);
   /* Release the ESP UART owner on bounded NOR failures as well as timeouts. */
   if (active) send(m, "cancel_ota\r\n");
 }
 void maintenance_init(screen_maintenance *m) {
-  if (m->state && m->activity) m->activity(m->context, false);
+  bool was_busy = m->state || m->staged;
+  if (was_busy) screen_update_abort(&m->update);
   m->state = 0;
   m->staged = false;
   m->receiving = false;
   m->used = 0;
   m->discard = false;
   m->block_at = m->block_size = m->prefix_at = 0;
+  /* Call after clearing staged/state: the board can now release its hold. */
+  if (was_busy && m->activity) m->activity(m->context, false);
 }
 bool maintenance_query(screen_maintenance *m, uint32_t now) {
   if (m->state)
     return false;
   m->state = 1;
-  if (m->activity) m->activity(m->context, true);
   m->staged = false;
+  if (m->activity) m->activity(m->context, true);
   m->deadline = now + 30000;
   char query[128];
   snprintf(query, sizeof(query), "bin_summary 1 %s\r\n",
@@ -68,7 +72,7 @@ static bool digest(const char *s, uint8_t out[16]) {
 static bool ota_line(screen_maintenance *m, const char *s, uint32_t now) {
   if (!m->state)
     return false;
-  m->deadline = now + 30000;
+  /* Only actual OTA progress may extend the deadline. */
   if (m->state == 1 && !strncmp(s, "+bin_summary:", 13)) {
     const char *comma = strchr(s + 13, ',');
     uint8_t md5[16];
@@ -90,6 +94,7 @@ static bool ota_line(screen_maintenance *m, const char *s, uint32_t now) {
   }
   if (m->state == 2 && !strcmp(s, "+start_ota:OK")) {
     m->state = 3;
+    rearm(m, now);
     if (!send(m, "download_bin 1024\r\n"))
       abort_transfer(m);
     return true;
@@ -126,6 +131,7 @@ static bool ota_line(screen_maintenance *m, const char *s, uint32_t now) {
     m->block_at = m->prefix_at = 0;
     m->receiving = true;
     m->state = 4;
+    rearm(m, now);
     if (!send(m, ">\r\n"))
       abort_transfer(m);
     return true;
@@ -141,6 +147,9 @@ static bool ota_line(screen_maintenance *m, const char *s, uint32_t now) {
      * commits only after identifying a supported loader and a second complete
      * NOR rehash. Boot exports are independent of activation. */
     m->state = 0;
+    /* A staged image is not an indefinite startup hold. Activation must
+     * begin within three minutes; the existing guarded NOR recheck remains. */
+    m->deadline = (m->clock ? m->clock(m->context) : now) + 180000;
     if (m->activity) m->activity(m->context, false);
     return true;
   }
@@ -195,6 +204,6 @@ void maintenance_feed(screen_maintenance *m, uint8_t c, uint32_t now) {
   }
 }
 void maintenance_tick(screen_maintenance *m, uint32_t now) {
-  if (m->state && (int32_t)(now - m->deadline) >= 0)
+  if ((m->state || m->staged) && (int32_t)(now - m->deadline) >= 0)
     abort_transfer(m);
 }

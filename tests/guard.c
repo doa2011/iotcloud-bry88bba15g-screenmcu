@@ -163,5 +163,13 @@ int main(void) {
   send_fail = true;
   n = screen_link_encode(wire, sizeof(wire), g.session, 4, p, 8);
   assert(guard_receive(&g, wire, n - 2, false) && resets == 1);
+  /* A durably committed install must reboot even if its ACK is lost. */
+  p[1] = GUARD_INSTALL;
+  n = screen_link_encode(wire, sizeof(wire), g.session, 5, p, 8);
+  assert(guard_receive(&g, wire, n - 2, false));
+  assert(installs == 5 && restarts == 3);
+  p[1] = GUARD_RESTART;
+  n = screen_link_encode(wire, sizeof(wire), g.session, 6, p, 8);
+  assert(guard_receive(&g, wire, n - 2, false) && restarts == 3);
   puts("30s window, wrap, hold, forced recovery, 2x80KiB, CRC, replay, ranges and OTA exclusion passed");
 }
