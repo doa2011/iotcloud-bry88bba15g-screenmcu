@@ -85,6 +85,11 @@ jobs:
             -DCJSON_DIR="$PWD/.deps/cjson"
       - name: Compile SWM34S firmware
         run: cmake --build build-arm --target screen_firmware --parallel 2
+      - name: Check compiled OTA reset handoff
+        run: |
+          toolchain="$HOME/.cache/phicomm/toolchains/arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-eabi"
+          "$toolchain/bin/arm-none-eabi-objdump" -d --disassemble=board_ota_restart build-arm/screen_firmware.elf > build-arm/ota-reset-disassembly.txt
+          python3 tools/check_ota_reset.py build-arm/ota-reset-disassembly.txt
       - name: Verify firmware package
         run: |
           test -s build-arm/screen_firmware.bin
@@ -102,5 +107,6 @@ jobs:
             build-arm/screen_firmware.map
             build-arm/manifest.json
             build-arm/SHA256SUMS
+            build-arm/ota-reset-disassembly.txt
           if-no-files-found: error
           retention-days: 30

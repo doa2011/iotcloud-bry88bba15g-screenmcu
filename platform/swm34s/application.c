@@ -219,6 +219,7 @@ static void guard_reset(void *context) {
   board_delay(30);
   NVIC_SystemReset();
 }
+static bool ota_boot_committed IRAM;
 static bool guard_install(void *context) {
   (void)context;
   if (normal_ready) screen_module_inhibit(&runtime.module, true);
@@ -227,6 +228,7 @@ static bool guard_install(void *context) {
   bool ok = maintenance.staged &&
             screen_boot_ack(&boot_control) &&
             screen_boot_commit(&boot_control, &maintenance.update);
+  ota_boot_committed = ok;
   /* A failed activation must release a temporary recovery hold. Otherwise
    * startup remains in the recovery loop and never initializes sensors.
    * Preserve forced fault-recovery holds: only a normal OTA recovery is released. */
@@ -242,6 +244,27 @@ static void guard_restart(void *context) {
   (void)context;
   board_module_write(NULL, false);
   recovery_latch(false);
+  if (ota_boot_committed) {
+    /* Keep the verified A1 flag intact. No reset if NOR is not idle. */
+    if (!board_ota_handoff_ready()) {
+      board_send(NULL, "screen_ota_error reset_handoff_busy\r\n",
+                 sizeof("screen_ota_error reset_handoff_busy\r\n") - 1);
+      return;
+    }
+    board_lvgl_tick_stop();
+    if (panel_ready) {
+      LCD_Stop(LCD);
+      /* DMA2D normally finishes before pump(); stop any residual bus master. */
+      SYS->PRSTEN = 0x55;
+      SYS->PRSTR0 |= SYS_PRSTR0_DMA2D_Msk;
+      __DSB();
+      SYS->PRSTR0 &= ~SYS_PRSTR0_DMA2D_Msk;
+      SYS->PRSTEN = 0;
+      SYS->CLKEN0 &= ~SYS_CLKEN0_DMA2D_Msk;
+      board_jpeg_idle();
+    }
+    board_ota_restart();
+  }
   board_delay(30);
   /* SDK WDT_Stop: the 30 ms without feeding exceeds the required five
    * WDT source clocks between the last feed and stopping. */

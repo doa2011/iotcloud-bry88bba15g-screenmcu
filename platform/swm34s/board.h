@@ -21,6 +21,8 @@ typedef struct {
 } board_watchdog_state;
 extern board_watchdog_state board_inherited_watchdog;
 void board_watchdog_feed(void);
+bool board_ota_handoff_ready(void);
+void board_ota_restart(void) __attribute__((noreturn));
 bool board_boot_read(void *, uint32_t, void *, size_t);
 void board_early(void);
 uint32_t board_nonce(void *);
