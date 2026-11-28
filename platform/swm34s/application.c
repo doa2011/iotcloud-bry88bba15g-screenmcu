@@ -73,7 +73,7 @@ enum { STAGE_EARLY = 1, STAGE_WINDOW, STAGE_SDRAM, STAGE_BSS,
        STAGE_FACTORY, STAGE_RTC, STAGE_SENSORS, STAGE_LVGL, STAGE_PANEL,
        STAGE_NORMAL, STAGE_RTC_TICK, STAGE_SENSOR_TICK, STAGE_POWER,
        STAGE_RENDER, STAGE_OTA_CHECK, STAGE_OTA_COMMITTED,
-       STAGE_OTA_QUIESCE, STAGE_OTA_RESET };
+       STAGE_OTA_QUIESCE, STAGE_OTA_RESET, STAGE_OTA_HANDOFF };
 static void stage(uint32_t value) { fault_record[0] = value; __DSB(); }
 static void recovery_latch(bool held) {
   fault_latch_check = held ? ~0x52454356u : 0;
@@ -245,15 +245,30 @@ static bool guard_install(void *context) {
 }
 static void guard_restart(void *context) {
   (void)context;
-  board_module_write(NULL, false);
-  recovery_latch(false);
   if (ota_boot_committed) {
-    /* Keep the verified A1 flag intact. No reset if NOR is not idle. */
-    if (!board_ota_handoff_ready()) {
+    /* The A1 record is already committed. Keep the diagnostic stage visible
+     * while NOR/SFC finish their last operation, and retry transient busy
+     * responses instead of abandoning the MCU with its sensor module held. */
+    stage(STAGE_OTA_HANDOFF);
+    bool handoff_ready = false;
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+      if (board_ota_handoff_ready()) {
+        handoff_ready = true;
+        break;
+      }
+      board_watchdog_feed();
+      if (attempt != 2) board_delay(20);
+    }
+    if (!handoff_ready) {
       board_send(NULL, "screen_ota_error reset_handoff_busy\r\n",
                  sizeof("screen_ota_error reset_handoff_busy\r\n") - 1);
+      /* The verified A1 flag remains intact for a later reset/retry. Restore
+       * the running application's module instead of silently leaving PD12 low. */
+      if (normal_ready) screen_module_inhibit(&runtime.module, false);
       return;
     }
+    board_module_write(NULL, false);
+    recovery_latch(false);
     stage(STAGE_OTA_QUIESCE);
     board_lvgl_tick_stop();
     if (panel_ready) {
@@ -270,6 +285,8 @@ static void guard_restart(void *context) {
     stage(STAGE_OTA_RESET);
     board_ota_restart();
   }
+  board_module_write(NULL, false);
+  recovery_latch(false);
   board_delay(30);
   /* SDK WDT_Stop: the 30 ms without feeding exceeds the required five
    * WDT source clocks between the last feed and stopping. */
